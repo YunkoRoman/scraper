@@ -1,6 +1,7 @@
 export type StepName = string & { readonly __brand: 'StepName' }
 
 export function stepName(value: string): StepName {
-  if (!value.trim()) throw new Error('StepName cannot be empty')
-  return value as StepName
+  const trimmed = value.trim()
+  if (!trimmed) throw new Error('StepName cannot be empty')
+  return trimmed as StepName
 }
