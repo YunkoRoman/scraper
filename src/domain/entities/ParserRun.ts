@@ -1,0 +1,90 @@
+import { createPageTask, type PageTask } from './PageTask.js'
+import { PageState, isTerminal } from '../value-objects/PageState.js'
+import type { StepName } from '../value-objects/StepName.js'
+import type { RetryConfig } from '../value-objects/RetryConfig.js'
+import { DEFAULT_RETRY_CONFIG } from '../value-objects/RetryConfig.js'
+
+export interface RunStats {
+  total: number
+  pending: number
+  retry: number
+  success: number
+  failed: number
+  aborted: number
+  inProgress: number
+}
+
+export class ParserRun {
+  private tasks = new Map<string, PageTask>()
+  readonly startedAt = new Date()
+
+  constructor(readonly parserName: string) {}
+
+  addTask(
+    url: string,
+    step: StepName,
+    retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG,
+    parentTaskId?: string,
+    parentData?: Record<string, string>,
+  ): PageTask {
+    const task = createPageTask(url, step, retryConfig, parentTaskId, parentData)
+    this.tasks.set(task.id, task)
+    return task
+  }
+
+  getTask(id: string): PageTask | undefined {
+    return this.tasks.get(id)
+  }
+
+  markRetry(id: string, error: string): void {
+    const task = this.requireTask(id)
+    this.tasks.set(id, { ...task, state: PageState.Retry, attempts: task.attempts + 1, error })
+  }
+
+  markSuccess(id: string): void {
+    const task = this.requireTask(id)
+    this.tasks.set(id, { ...task, state: PageState.Success, error: undefined })
+  }
+
+  markFailed(id: string, error: string): void {
+    const task = this.requireTask(id)
+    this.tasks.set(id, { ...task, state: PageState.Failed, error })
+  }
+
+  markAborted(id: string): void {
+    const task = this.requireTask(id)
+    this.tasks.set(id, { ...task, state: PageState.Aborted })
+  }
+
+  isComplete(): boolean {
+    if (this.tasks.size === 0) return false
+    return [...this.tasks.values()].every((t) => isTerminal(t.state))
+  }
+
+  allTasks(): PageTask[] {
+    return [...this.tasks.values()]
+  }
+
+  getStats(): RunStats {
+    const tasks = [...this.tasks.values()]
+    return {
+      total: tasks.length,
+      pending: tasks.filter((t) => t.state === PageState.Pending).length,
+      retry: tasks.filter((t) => t.state === PageState.Retry).length,
+      success: tasks.filter((t) => t.state === PageState.Success).length,
+      failed: tasks.filter((t) => t.state === PageState.Failed).length,
+      aborted: tasks.filter((t) => t.state === PageState.Aborted).length,
+      inProgress: tasks.filter((t) => t.state === PageState.Pending || t.state === PageState.Retry).length,
+    }
+  }
+
+  elapsedMs(): number {
+    return Date.now() - this.startedAt.getTime()
+  }
+
+  private requireTask(id: string): PageTask {
+    const task = this.tasks.get(id)
+    if (!task) throw new Error(`Task ${id} not found`)
+    return task
+  }
+}
