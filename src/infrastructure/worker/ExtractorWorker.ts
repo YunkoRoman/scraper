@@ -1,69 +1,49 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import type { WorkerInMessage, WorkerOutMessage } from './messages.js'
-import { PlaywrightAdapter } from '../playwright/PlaywrightAdapter.js'
+import { createBrowserAdapter } from '../browser/BrowserAdapter.js'
+import type { BrowserAdapter } from '../browser/BrowserAdapter.js'
 import type { PageTask } from '../../domain/entities/PageTask.js'
+import type { Extractor } from '../../domain/entities/Extractor.js'
+import type { ParserConfig } from '../../domain/entities/Parser.js'
 import type { StepName } from '../../domain/value-objects/StepName.js'
 
-// Plain object (class instance loses methods through structured clone)
-interface ExtractorData {
-  name: StepName
-  type: 'extractor'
-  dataSelectors: Record<string, string>
-  outputFile: string
-}
+const { parserFilePath, stepName } = workerData as { parserFilePath: string; stepName: string }
 
-const playwright = new PlaywrightAdapter()
+let adapter: BrowserAdapter = createBrowserAdapter()
 let running = true
 
-async function processPage(task: PageTask, step: ExtractorData): Promise<void> {
-  const page = await playwright.newPage()
+async function processPage(task: PageTask, step: Extractor): Promise<void> {
+  const page = await adapter.newPage()
   try {
     await page.goto(task.url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-
-    const data: Record<string, string> = {}
-
-    if (task.parentData) {
-      Object.assign(data, task.parentData)
-    }
-
-    for (const [key, selector] of Object.entries(step.dataSelectors)) {
-      data[key] = await page
-        .$eval(selector, (el) => el.textContent?.trim() ?? '')
-        .catch(() => '')
-    }
-
-    data['__url'] = task.url
-
-    const extractMsg: WorkerOutMessage = {
+    const rows = await step.run(page, task)
+    parentPort!.postMessage({
       type: 'DATA_EXTRACTED',
       taskId: task.id,
-      data,
+      rows,
       outputFile: step.outputFile,
-    }
-    parentPort!.postMessage(extractMsg)
-
-    const successMsg: WorkerOutMessage = { type: 'PAGE_SUCCESS', taskId: task.id }
-    parentPort!.postMessage(successMsg)
+    } satisfies WorkerOutMessage)
+    parentPort!.postMessage({ type: 'PAGE_SUCCESS', taskId: task.id } satisfies WorkerOutMessage)
   } catch (err) {
-    const failMsg: WorkerOutMessage = {
-      type: 'PAGE_FAILED',
-      taskId: task.id,
-      error: String(err),
-    }
-    parentPort!.postMessage(failMsg)
+    parentPort!.postMessage({ type: 'PAGE_FAILED', taskId: task.id, error: String(err) } satisfies WorkerOutMessage)
   } finally {
     await page.close()
   }
 }
 
 async function main() {
-  const step: ExtractorData = workerData.step
-  await playwright.launch()
+  const mod = (await import(parserFilePath)) as { default: ParserConfig }
+  const config = mod.default
+  const step = config.steps.get(stepName as StepName) as Extractor
+  if (!step) throw new Error(`Step "${stepName}" not found in parser "${config.name}"`)
+
+  adapter = createBrowserAdapter(step.settings?.browser_type)
+  await adapter.launch()
 
   parentPort!.on('message', async (msg: WorkerInMessage) => {
     if (msg.type === 'STOP') {
       running = false
-      await playwright.close()
+      await adapter.close()
       return
     }
     if (msg.type === 'PROCESS_PAGE' && running) {
