@@ -1,6 +1,7 @@
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
+import type { BrowserAdapter } from './BrowserAdapter.js'
 
-export class PlaywrightAdapter {
+export class PlaywrightAdapter implements BrowserAdapter {
   private browser: Browser | null = null
   private context: BrowserContext | null = null
 
