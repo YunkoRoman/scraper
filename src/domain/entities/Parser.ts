@@ -1,23 +1,26 @@
+import type { Page } from 'playwright'
 import type { StepName } from '../value-objects/StepName.js'
 import { stepName } from '../value-objects/StepName.js'
 import type { RetryConfig } from '../value-objects/RetryConfig.js'
 import { DEFAULT_RETRY_CONFIG } from '../value-objects/RetryConfig.js'
+import type { StepSettings } from '../value-objects/StepSettings.js'
+import type { TraverserResult } from '../value-objects/TraverserResult.js'
 import { Traverser } from './Traverser.js'
 import { Extractor } from './Extractor.js'
 import type { Step } from './Step.js'
+import type { PageTask } from './PageTask.js'
 
 type TraverserDef = {
   type: 'traverser'
-  linkSelector: string
-  nextStep: string | string[]
-  parentDataSelectors?: Record<string, string>
-  nextPageSelector?: string
+  settings?: StepSettings
+  run: (page: Page, task: PageTask) => Promise<TraverserResult[]>
 }
 
 type ExtractorDef = {
   type: 'extractor'
-  dataSelectors: Record<string, string>
-  outputFile: string
+  outputFile?: string
+  settings?: StepSettings
+  run: (page: Page, task: PageTask) => Promise<Record<string, unknown>[]>
 }
 
 type StepDef = TraverserDef | ExtractorDef
@@ -29,12 +32,13 @@ export interface ParserConfig {
   steps: Map<StepName, Step>
   retryConfig: RetryConfig
   deduplication: boolean
+  filePath?: string
 }
 
 export interface ParserDefinition {
   name: string
   entryUrl: string
-  entryStep: string
+  entryStep?: string
   retryConfig?: Partial<RetryConfig>
   deduplication?: boolean
   steps: Record<string, StepDef>
@@ -42,32 +46,25 @@ export interface ParserDefinition {
 
 export function defineParser(def: ParserDefinition): ParserConfig {
   const steps = new Map<StepName, Step>()
+  const stepKeys = Object.keys(def.steps)
 
   for (const [name, stepDef] of Object.entries(def.steps)) {
     const sn = stepName(name)
     if (stepDef.type === 'traverser') {
-      const nextSteps = Array.isArray(stepDef.nextStep)
-        ? stepDef.nextStep.map(stepName)
-        : stepName(stepDef.nextStep)
-      steps.set(
-        sn,
-        new Traverser(
-          sn,
-          stepDef.linkSelector,
-          nextSteps,
-          stepDef.parentDataSelectors,
-          stepDef.nextPageSelector,
-        ),
-      )
+      steps.set(sn, new Traverser(sn, stepDef.run, stepDef.settings))
     } else {
-      steps.set(sn, new Extractor(sn, stepDef.dataSelectors, stepDef.outputFile))
+      const outFile = stepDef.outputFile ?? `${name}.csv`
+      steps.set(sn, new Extractor(sn, stepDef.run, outFile, stepDef.settings))
     }
   }
+
+  const entry = def.entryStep ?? stepKeys[0]
+  if (!entry) throw new Error('Parser must have at least one step')
 
   return {
     name: def.name,
     entryUrl: def.entryUrl,
-    entryStep: stepName(def.entryStep),
+    entryStep: stepName(entry),
     steps,
     retryConfig: { ...DEFAULT_RETRY_CONFIG, ...def.retryConfig },
     deduplication: def.deduplication ?? true,
