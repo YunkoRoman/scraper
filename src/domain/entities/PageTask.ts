@@ -13,7 +13,7 @@ export interface PageTask {
   readonly maxAttempts: number
   readonly error?: string
   readonly parentTaskId?: string
-  readonly parentData?: Record<string, string>
+  readonly parentData?: Record<string, unknown>
 }
 
 export function createPageTask(
@@ -21,7 +21,7 @@ export function createPageTask(
   step: StepName,
   retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG,
   parentTaskId?: string,
-  parentData?: Record<string, string>,
+  parentData?: Record<string, unknown>,
 ): PageTask {
   return {
     id: randomUUID(),
