@@ -18,12 +18,12 @@ const __dirname = dirname(__filename)
 // Detect tsx (dev) vs compiled JS to resolve worker file extension correctly
 const isTsx = __filename.endsWith('.ts')
 const workerExt = isTsx ? '.ts' : '.js'
-const workerExecArgv = isTsx ? ['--import', 'tsx/esm'] : []
 
 export class ParserOrchestrator extends EventEmitter {
   private run: ParserRun
   private workers = new Map<StepName, Worker>()
   private csvWriters = new Map<string, CsvWriter>()
+  private pendingWrites: Promise<void>[] = []
   private deduplicator: LinkDeduplicator
   private outputDir: string
   private stopped = false
@@ -81,34 +81,43 @@ export class ParserOrchestrator extends EventEmitter {
   }
 
   private spawnWorker(step: Step): void {
-    const workerFile =
+    if (!this.config.filePath) {
+      throw new Error('ParserConfig.filePath not set — load parser via FileParserLoader')
+    }
+
+    const bootstrapFile = resolve(__dirname, '../../infrastructure/worker/worker-bootstrap.js')
+    const tsWorkerFile =
       step.type === 'traverser'
-        ? resolve(__dirname, `../../infrastructure/worker/TraverserWorker${workerExt}`)
-        : resolve(__dirname, `../../infrastructure/worker/ExtractorWorker${workerExt}`)
+        ? resolve(__dirname, '../../infrastructure/worker/TraverserWorker.ts')
+        : resolve(__dirname, '../../infrastructure/worker/ExtractorWorker.ts')
+    const jsWorkerFile =
+      step.type === 'traverser'
+        ? resolve(__dirname, '../../infrastructure/worker/TraverserWorker.js')
+        : resolve(__dirname, '../../infrastructure/worker/ExtractorWorker.js')
 
-    // Pass plain serializable object (class instances lose methods via structured clone)
-    const worker = new Worker(workerFile, {
-      workerData: { step: { ...step } },
-      execArgv: workerExecArgv,
-    })
+    const entryFile = isTsx ? bootstrapFile : jsWorkerFile
+    const wData = isTsx
+      ? { parserFilePath: this.config.filePath, stepName: step.name, __workerPath: tsWorkerFile }
+      : { parserFilePath: this.config.filePath, stepName: step.name }
 
+    const worker = new Worker(entryFile, { workerData: wData })
     worker.on('message', (msg: WorkerOutMessage) => this.handleWorkerMessage(msg))
     worker.on('error', (err) => this.emit('error', err))
-
     this.workers.set(step.name, worker)
   }
 
   private handleWorkerMessage(msg: WorkerOutMessage): void {
     switch (msg.type) {
       case 'LINKS_DISCOVERED': {
-        const newLinks = this.deduplicator.filter(msg.links)
-        for (const url of newLinks) {
+        const newLinks = this.deduplicator.filter(msg.items.map((i) => i.link))
+        const newItems = msg.items.filter((i) => newLinks.includes(i.link))
+        for (const item of newItems) {
           const task = this.run.addTask(
-            url,
-            msg.nextStep,
+            item.link,
+            item.page_type as StepName,
             this.config.retryConfig,
             msg.taskId,
-            msg.parentData,
+            item.parent_data,
           )
           this.dispatchTask(task.id)
         }
@@ -116,7 +125,13 @@ export class ParserOrchestrator extends EventEmitter {
         break
       }
       case 'DATA_EXTRACTED': {
-        this.writeCsvRow(msg.outputFile, msg.data)
+        for (const row of msg.rows) {
+          const stringRow: Record<string, string> = {}
+          for (const [k, v] of Object.entries(row)) {
+            stringRow[k] = v == null ? '' : String(v)
+          }
+          this.writeCsvRow(msg.outputFile, stringRow)
+        }
         break
       }
       case 'PAGE_SUCCESS': {
@@ -155,7 +170,8 @@ export class ParserOrchestrator extends EventEmitter {
     if (!this.csvWriters.has(filePath)) {
       this.csvWriters.set(filePath, new CsvWriter(filePath))
     }
-    this.csvWriters.get(filePath)!.write(data).catch(console.error)
+    const p = this.csvWriters.get(filePath)!.write(data).catch(console.error) as Promise<void>
+    this.pendingWrites.push(p)
   }
 
   private async checkCompletion(): Promise<void> {
@@ -167,6 +183,7 @@ export class ParserOrchestrator extends EventEmitter {
   }
 
   private async closeAllWriters(): Promise<void> {
+    await Promise.all(this.pendingWrites)
     await Promise.all([...this.csvWriters.values()].map((w) => w.close()))
   }
 
