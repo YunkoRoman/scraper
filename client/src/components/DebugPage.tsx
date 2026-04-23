@@ -67,7 +67,10 @@ export function DebugPage() {
         setSteps(s)
         setSelectedStep(s[0]?.name ?? '')
       })
-      .catch(() => setSteps([]))
+      .catch(() => {
+        setSteps([])
+        setSelectedStep('')
+      })
   }, [selectedParser])
 
   // Auto-scroll console
