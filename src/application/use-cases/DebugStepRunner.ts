@@ -19,7 +19,7 @@ export type DebugResult =
 
 export class DebugStepRunner extends EventEmitter {
   private worker: Worker | null = null
-  private pendingReject: ((reason: string) => void) | null = null
+  private pendingReject: ((reason?: unknown) => void) | null = null
 
   constructor(private readonly loader: FileParserLoader) {
     super()
@@ -80,7 +80,14 @@ export class DebugStepRunner extends EventEmitter {
 
       worker.on('error', (err) => {
         this._cleanup()
-        reject(err.message)
+        reject(err)
+      })
+
+      worker.on('exit', (code) => {
+        if (code !== 0 && this.pendingReject) {
+          this._cleanup()
+          reject(new Error(`Worker exited with code ${code}`))
+        }
       })
 
       worker.postMessage({ type: 'PROCESS_PAGE', task })
@@ -89,6 +96,7 @@ export class DebugStepRunner extends EventEmitter {
 
   stop(): void {
     if (this.worker) {
+      this.pendingReject?.('aborted')
       this.worker.terminate()
       this._cleanup()
     }
@@ -96,7 +104,6 @@ export class DebugStepRunner extends EventEmitter {
 
   private _cleanup(): void {
     this.worker = null
-    this.pendingReject?.('aborted')
     this.pendingReject = null
   }
 }
