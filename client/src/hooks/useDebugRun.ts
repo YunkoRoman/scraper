@@ -51,6 +51,7 @@ export function useDebugRun() {
       })
 
       if (!res.ok || !res.body) {
+        if (controller.signal.aborted) return
         const text = await res.text().catch(() => 'Unknown error')
         setState((prev) => ({ ...prev, status: 'error', error: text }))
         return
