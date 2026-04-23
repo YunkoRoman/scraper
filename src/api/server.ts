@@ -139,7 +139,9 @@ app.get('/api/parsers/:name/steps', async (req, res) => {
     }))
     res.json({ steps })
   } catch (err) {
-    res.status(404).json({ error: (err as Error).message })
+    const msg = (err as Error).message
+    const status = msg.includes('ENOENT') || msg.includes('not found') ? 404 : 500
+    res.status(status).json({ error: msg })
   }
 })
 
@@ -162,14 +164,15 @@ app.post('/api/parsers/:name/steps/:step/debug', async (req, res) => {
   const debugRunner = new DebugStepRunner(loader)
   debugRunner.on('log', (log) => send({ type: 'log', ...log }))
   debugRunner.on('result', (result) => send({ type: 'result', result }))
-  req.on('close', () => debugRunner.stop())
+  let cancelled = false
+  req.on('close', () => { cancelled = true; debugRunner.stop() })
 
   try {
     await debugRunner.run(name, step, url, parentData)
-    send({ type: 'done' })
+    if (!cancelled) send({ type: 'done' })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    if (message !== 'aborted') send({ type: 'error', error: message })
+    if (!(err instanceof Error && err.message === 'aborted')) send({ type: 'error', error: message })
   } finally {
     res.end()
   }
