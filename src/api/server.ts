@@ -153,6 +153,10 @@ app.post('/api/parsers/:name/steps/:step/debug', async (req, res) => {
     res.status(400).json({ error: 'url is required' })
     return
   }
+  if (!/^https?:\/\//i.test(url)) {
+    res.status(400).json({ error: 'url must start with http:// or https://' })
+    return
+  }
 
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')

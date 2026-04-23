@@ -97,12 +97,14 @@ export class DebugStepRunner extends EventEmitter {
   stop(): void {
     if (this.worker) {
       this.pendingReject?.(new Error('aborted'))
-      this.worker.terminate()
       this._cleanup()
     }
   }
 
   private _cleanup(): void {
+    if (this.worker) {
+      this.worker.terminate()
+    }
     this.worker = null
     this.pendingReject = null
   }
