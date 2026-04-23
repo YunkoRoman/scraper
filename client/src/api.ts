@@ -72,7 +72,10 @@ export interface TraverserResult {
 
 export async function listSteps(parserName: string): Promise<StepInfo[]> {
   const res = await fetch(`/api/parsers/${parserName}/steps`)
-  if (!res.ok) throw new Error('Failed to load steps')
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { error?: string }).error ?? 'Failed to load steps')
+  }
   const data = await res.json()
   return data.steps as StepInfo[]
 }
