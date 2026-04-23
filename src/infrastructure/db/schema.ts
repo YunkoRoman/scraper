@@ -12,8 +12,8 @@ export const parsers = pgTable('parsers', {
   retryConfig: jsonb('retry_config').notNull().default({ maxRetries: 5 }),
   deduplication: boolean('deduplication').notNull().default(true),
   concurrentQuota: integer('concurrent_quota'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 export const steps = pgTable('steps', {
@@ -26,8 +26,8 @@ export const steps = pgTable('steps', {
   code: text('code').notNull().default(''),
   stepSettings: jsonb('step_settings').notNull().default({}),
   position: integer('position').notNull().default(0),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 export const parsersRelations = relations(parsers, ({ many }) => ({

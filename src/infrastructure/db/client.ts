@@ -7,5 +7,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/scraper',
 })
 
+pool.on('error', (err) => console.error('DB pool error:', err))
+
 export const db = drizzle(pool, { schema })
 export { pool }
