@@ -17,7 +17,6 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 // Detect tsx (dev) vs compiled JS to resolve worker file extension correctly
 const isTsx = __filename.endsWith('.ts')
-const workerExt = isTsx ? '.ts' : '.js'
 
 export class ParserOrchestrator extends EventEmitter {
   private run: ParserRun
@@ -27,8 +26,11 @@ export class ParserOrchestrator extends EventEmitter {
   private deduplicator: LinkDeduplicator
   private outputDir: string
   private stopped = false
+  private completing = false
   private completionPromise!: Promise<void>
   private resolveCompletion!: () => void
+  private globalActive = 0
+  private dispatchQueue: string[] = []
 
   constructor(
     private readonly config: ParserConfig,
@@ -52,8 +54,9 @@ export class ParserOrchestrator extends EventEmitter {
     }
 
     const initialUrls = this.deduplicator.filter([this.config.entryUrl])
+    const entryStepType = this.config.steps.get(this.config.entryStep)?.type ?? 'traverser'
     for (const url of initialUrls) {
-      const task = this.run.addTask(url, this.config.entryStep, this.config.retryConfig)
+      const task = this.run.addTask(url, this.config.entryStep, entryStepType, this.config.retryConfig)
       this.dispatchTask(task.id)
     }
 
@@ -69,9 +72,16 @@ export class ParserOrchestrator extends EventEmitter {
         this.run.markAborted(task.id)
       }
     }
-    for (const [, worker] of this.workers) {
-      worker.postMessage({ type: 'STOP' })
-    }
+    const exitPromises = [...this.workers.values()].map(
+      (worker) =>
+        new Promise<void>((resolve) => {
+          worker.once('exit', () => resolve())
+          worker.postMessage({ type: 'STOP' })
+          // Forcefully terminate if worker doesn't exit within 5s
+          setTimeout(() => worker.terminate().then(() => resolve()).catch(() => resolve()), 5_000)
+        }),
+    )
+    await Promise.all(exitPromises)
     await this.closeAllWriters()
     this.resolveCompletion()
   }
@@ -84,6 +94,7 @@ export class ParserOrchestrator extends EventEmitter {
     if (!this.config.filePath) {
       throw new Error('ParserConfig.filePath not set — load parser via FileParserLoader')
     }
+    console.log(`[orchestrator] spawning worker: ${step.name} (${step.type})`)
 
     const bootstrapFile = resolve(__dirname, '../../infrastructure/worker/worker-bootstrap.js')
     const tsWorkerFile =
@@ -97,9 +108,10 @@ export class ParserOrchestrator extends EventEmitter {
 
     const entryFile = isTsx ? bootstrapFile : jsWorkerFile
     const wData = isTsx
-      ? { parserFilePath: this.config.filePath, stepName: step.name, __workerPath: tsWorkerFile }
-      : { parserFilePath: this.config.filePath, stepName: step.name }
+      ? { parserFilePath: this.config.filePath, stepName: step.name, __workerPath: tsWorkerFile, browserSettings: this.config.browserSettings }
+      : { parserFilePath: this.config.filePath, stepName: step.name, browserSettings: this.config.browserSettings }
 
+    console.log(`[orchestrator] worker file: ${entryFile}`)
     const worker = new Worker(entryFile, { workerData: wData })
     worker.on('message', (msg: WorkerOutMessage) => this.handleWorkerMessage(msg))
     worker.on('error', (err) => this.emit('error', err))
@@ -109,12 +121,15 @@ export class ParserOrchestrator extends EventEmitter {
   private handleWorkerMessage(msg: WorkerOutMessage): void {
     switch (msg.type) {
       case 'LINKS_DISCOVERED': {
-        const newLinks = this.deduplicator.filter(msg.items.map((i) => i.link))
-        const newItems = msg.items.filter((i) => newLinks.includes(i.link))
+        const newLinks = new Set(this.deduplicator.filter(msg.items.map((i) => i.link)))
+        const newItems = msg.items.filter((i) => newLinks.has(i.link))
         for (const item of newItems) {
+          const stepName = item.page_type as StepName
+          const stepType = this.config.steps.get(stepName)?.type ?? 'traverser'
           const task = this.run.addTask(
             item.link,
-            item.page_type as StepName,
+            stepName,
+            stepType,
             this.config.retryConfig,
             msg.taskId,
             item.parent_data,
@@ -135,12 +150,21 @@ export class ParserOrchestrator extends EventEmitter {
         break
       }
       case 'PAGE_SUCCESS': {
+        this.globalActive--
         this.run.markSuccess(msg.taskId)
         this.emit('stats', this.run.getStats())
+        this.flushDispatchQueue()
         this.checkCompletion()
         break
       }
+      case 'LOG': {
+        const line = `[${msg.stepName}] ${msg.args.join(' ')}`
+        if (msg.level === 'error') console.error(line)
+        else console.log(line)
+        break
+      }
       case 'PAGE_FAILED': {
+        this.globalActive--
         const task = this.run.getTask(msg.taskId)!
         if (task.attempts < task.maxAttempts) {
           this.run.markRetry(msg.taskId, msg.error)
@@ -151,6 +175,7 @@ export class ParserOrchestrator extends EventEmitter {
           this.emit('stats', this.run.getStats())
           this.checkCompletion()
         }
+        this.flushDispatchQueue()
         break
       }
     }
@@ -158,11 +183,37 @@ export class ParserOrchestrator extends EventEmitter {
 
   private dispatchTask(taskId: string): void {
     if (this.stopped) return
+    const quota = this.config.concurrentQuota
+    if (quota !== undefined && this.globalActive >= quota) {
+      this.dispatchQueue.push(taskId)
+      return
+    }
+    this._sendToWorker(taskId)
+  }
+
+  private _sendToWorker(taskId: string): void {
     const task = this.run.getTask(taskId)
     if (!task) return
     const worker = this.workers.get(task.stepName)
-    if (!worker) return
+    if (!worker) {
+      this.run.markFailed(taskId, `No worker for step "${task.stepName}"`)
+      this.emit('stats', this.run.getStats())
+      this.checkCompletion()
+      return
+    }
+    this.globalActive++
     worker.postMessage({ type: 'PROCESS_PAGE', task })
+  }
+
+  private flushDispatchQueue(): void {
+    const quota = this.config.concurrentQuota
+    while (
+      this.dispatchQueue.length > 0 &&
+      (quota === undefined || this.globalActive < quota)
+    ) {
+      const nextId = this.dispatchQueue.shift()!
+      this._sendToWorker(nextId)
+    }
   }
 
   private writeCsvRow(outputFile: string, data: Record<string, string>): void {
@@ -174,16 +225,21 @@ export class ParserOrchestrator extends EventEmitter {
     this.pendingWrites.push(p)
   }
 
-  private async checkCompletion(): Promise<void> {
-    if (this.stopped || !this.run.isComplete()) return
-    await this.closeAllWriters()
-    await this.runPostProcessing()
-    this.emit('complete', this.run.getStats())
-    this.resolveCompletion()
+  private checkCompletion(): void {
+    if (this.stopped || this.completing || !this.run.isComplete()) return
+    this.completing = true
+    this.closeAllWriters()
+      .then(() => this.runPostProcessing())
+      .then(() => {
+        this.emit('complete', this.run.getStats())
+        this.resolveCompletion()
+      })
+      .catch((err) => this.emit('error', err))
   }
 
   private async closeAllWriters(): Promise<void> {
     await Promise.all(this.pendingWrites)
+    this.pendingWrites = []
     await Promise.all([...this.csvWriters.values()].map((w) => w.close()))
   }
 

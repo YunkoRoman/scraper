@@ -1,16 +1,21 @@
-import type { Page } from 'playwright'
+import type { Page, Browser } from 'puppeteer'
 import type { BrowserAdapter } from './BrowserAdapter.js'
 
-export class PuppeteerAdapter implements BrowserAdapter {
+export class PuppeteerAdapter implements BrowserAdapter<Page> {
+  private browser: Browser | null = null
+
   async launch(): Promise<void> {
-    throw new Error(
-      'PuppeteerAdapter not implemented. Install puppeteer and implement this adapter.',
-    )
+    const puppeteer = await import('puppeteer')
+    this.browser = await puppeteer.default.launch({ headless: true })
   }
 
   async newPage(): Promise<Page> {
-    throw new Error('PuppeteerAdapter not implemented.')
+    if (!this.browser) throw new Error('PuppeteerAdapter not launched')
+    return this.browser.newPage()
   }
 
-  async close(): Promise<void> {}
+  async close(): Promise<void> {
+    await this.browser?.close()
+    this.browser = null
+  }
 }

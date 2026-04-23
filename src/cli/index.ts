@@ -17,6 +17,10 @@ const runParser = new RunParser(loader, outputDir)
 const runner = new ParserRunnerService(runParser)
 const reporter = new ConsoleReporter()
 
+runner.on('stats', (name: string, stats: RunStats) => reporter.update(name, stats))
+runner.on('complete', (name: string, stats: RunStats) => reporter.complete(name, stats))
+runner.on('postprocess', (name: string, filePath: string) => reporter.postProcess(name, filePath))
+
 program.name('scraper').description('Universal Playwright scraping platform').version('0.1.0')
 
 program
@@ -34,12 +38,7 @@ program
 
     const promises = parserNames.map((name) => {
       reporter.start(name)
-      return runner.run(
-        name,
-        (n, stats) => reporter.update(n, stats as RunStats),
-        (n, stats) => reporter.complete(n, stats as RunStats),
-        (n, filePath) => reporter.postProcess(n, filePath),
-      )
+      return runner.run(name)
     })
 
     await Promise.all(promises)

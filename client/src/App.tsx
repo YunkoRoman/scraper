@@ -23,6 +23,15 @@ function MoonIcon() {
   )
 }
 
+function MonitorIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  )
+}
+
 type Page = 'parsers' | 'debug'
 
 function getPageFromHash(): Page {
@@ -87,13 +96,14 @@ export default function App() {
           <span className="ml-auto text-xs text-gray-400 dark:text-gray-500 hidden sm:inline">
             {parsers.length} parser{parsers.length !== 1 ? 's' : ''} found
           </span>
-          <button
-            onClick={toggle}
-            className="ml-2 sm:ml-3 p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors"
-            aria-label="Toggle theme"
-          >
-            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
-          </button>
+            <button
+              onClick={toggle}
+              className="ml-2 sm:ml-3 p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors flex items-center justify-center"
+              aria-label={`Toggle theme (current: ${theme})`}
+              title={`Theme: ${theme}`}
+            >
+              {theme === 'system' ? <MonitorIcon /> : theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+            </button>
         </div>
       </header>
 

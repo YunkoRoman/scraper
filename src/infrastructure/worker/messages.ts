@@ -12,3 +12,4 @@ export type WorkerOutMessage =
   | { type: 'DATA_EXTRACTED'; taskId: string; rows: Record<string, unknown>[]; outputFile: string }
   | { type: 'PAGE_SUCCESS'; taskId: string }
   | { type: 'PAGE_FAILED'; taskId: string; error: string }
+  | { type: 'LOG'; level: 'log' | 'error'; stepName: string; args: string[] }

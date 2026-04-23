@@ -13,7 +13,7 @@ export class CsvWriter {
   async write(row: Record<string, string>): Promise<void> {
     if (!this.stream) {
       await mkdir(dirname(this.filePath), { recursive: true })
-      this.writeStream = createWriteStream(this.filePath, { flags: 'a' })
+      this.writeStream = createWriteStream(this.filePath, { flags: 'w' })
       this.headers = Object.keys(row)
       this.stream = format({ headers: this.headers, includeEndRowDelimiter: true, writeBOM: false })
       this.stream.pipe(this.writeStream)

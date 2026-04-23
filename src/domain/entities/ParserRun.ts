@@ -1,8 +1,15 @@
 import { createPageTask, type PageTask } from './PageTask.js'
+import type { StepType } from './Step.js'
 import { PageState, isTerminal } from '../value-objects/PageState.js'
 import type { StepName } from '../value-objects/StepName.js'
 import type { RetryConfig } from '../value-objects/RetryConfig.js'
 import { DEFAULT_RETRY_CONFIG } from '../value-objects/RetryConfig.js'
+
+export interface StepTypeStats {
+  total: number
+  success: number
+  failed: number
+}
 
 export interface RunStats {
   total: number
@@ -12,6 +19,8 @@ export interface RunStats {
   failed: number
   aborted: number
   inProgress: number
+  traversers: StepTypeStats
+  extractors: StepTypeStats
 }
 
 export class ParserRun {
@@ -23,11 +32,12 @@ export class ParserRun {
   addTask(
     url: string,
     step: StepName,
+    stepType: StepType,
     retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG,
     parentTaskId?: string,
     parentData?: Record<string, unknown>,
   ): PageTask {
-    const task = createPageTask(url, step, retryConfig, parentTaskId, parentData)
+    const task = createPageTask(url, step, stepType, retryConfig, parentTaskId, parentData)
     this.tasks.set(task.id, task)
     return task
   }
@@ -67,6 +77,14 @@ export class ParserRun {
 
   getStats(): RunStats {
     const tasks = [...this.tasks.values()]
+    const byType = (type: StepType): StepTypeStats => {
+      const subset = tasks.filter((t) => t.stepType === type)
+      return {
+        total: subset.length,
+        success: subset.filter((t) => t.state === PageState.Success).length,
+        failed: subset.filter((t) => t.state === PageState.Failed).length,
+      }
+    }
     return {
       total: tasks.length,
       pending: tasks.filter((t) => t.state === PageState.Pending).length,
@@ -75,6 +93,8 @@ export class ParserRun {
       failed: tasks.filter((t) => t.state === PageState.Failed).length,
       aborted: tasks.filter((t) => t.state === PageState.Aborted).length,
       inProgress: tasks.filter((t) => t.state === PageState.Pending || t.state === PageState.Retry).length,
+      traversers: byType('traverser'),
+      extractors: byType('extractor'),
     }
   }
 

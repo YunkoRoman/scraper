@@ -13,10 +13,13 @@ export default defineParser({
       type: 'traverser',
       run: async (page: Page, task: PageTask) => {
         const items = await page.$$eval('div.side_categories ul li ul li a', (els) =>
-          els.map((el) => ({
-            link: (el as HTMLAnchorElement).href,
-            category: el.textContent?.trim() ?? '',
-          })),
+          els.map((el) => {
+            console.log(el)
+            return {
+              link: (el as HTMLAnchorElement).href,
+              category: el.textContent?.trim() ?? '',
+            }
+          }),
         )
         return items.map(({ link, category }) => ({
           link,

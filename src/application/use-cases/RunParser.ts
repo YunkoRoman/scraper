@@ -18,7 +18,11 @@ export class RunParser {
     orchestrator.on('stats', onStats)
     orchestrator.on('complete', onComplete)
     orchestrator.on('postprocess', onPostProcess)
-    orchestrator.start().catch(console.error)
+    // Prevent uncaught exception crash — EventEmitter throws if no 'error' listener
+    orchestrator.on('error', (err: Error) =>
+      console.error(`[${parserName}] Worker error:`, err.message),
+    )
+    orchestrator.start().catch((err) => console.error(`[${parserName}] Start error:`, err))
     return orchestrator
   }
 }

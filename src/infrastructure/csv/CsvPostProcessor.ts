@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFile, writeFile } from 'node:fs/promises'
 
 export class CsvPostProcessor {
   constructor(private readonly filePath: string) {}
@@ -9,13 +9,13 @@ export class CsvPostProcessor {
   }
 
   private async compress(): Promise<void> {
-    const content = readFileSync(this.filePath, 'utf-8')
+    const content = await readFile(this.filePath, 'utf-8')
     const lines = content.split('\n').filter((line) => line.trim().length > 0)
-    writeFileSync(this.filePath, lines.join('\n') + '\n')
+    await writeFile(this.filePath, lines.join('\n') + '\n')
   }
 
   private async buildIndex(): Promise<void> {
-    const content = readFileSync(this.filePath, 'utf-8')
+    const content = await readFile(this.filePath, 'utf-8')
     const lines = content.split('\n')
     const index: Record<number, number> = {}
     let offset = 0
@@ -27,6 +27,6 @@ export class CsvPostProcessor {
       offset += Buffer.byteLength(lines[i] + '\n', 'utf-8')
     }
 
-    writeFileSync(`${this.filePath}.index`, JSON.stringify(index, null, 2))
+    await writeFile(`${this.filePath}.index`, JSON.stringify(index, null, 2))
   }
 }

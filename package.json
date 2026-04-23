@@ -4,17 +4,29 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/cli/index.ts",
+    "api": "tsx src/api/server.ts",
+    "api:dev": "tsx watch src/api/server.ts",
+    "client": "cd client && npm run dev",
+    "start": "concurrently \"npm run api:dev\" \"npm run client\"",
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
     "commander": "^12.1.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "fast-csv": "^5.0.1",
-    "playwright": "^1.44.0"
+    "playwright": "^1.44.0",
+    "playwright-extra": "^4.3.6",
+    "puppeteer": "^24.41.0",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "^20.14.0",
+    "concurrently": "^9.2.1",
     "tsx": "^4.15.0",
     "typescript": "^5.5.0",
     "vitest": "^1.6.0"

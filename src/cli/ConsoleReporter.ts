@@ -20,7 +20,9 @@ export class ConsoleReporter {
     const elapsed = this.formatElapsed(parserName)
     process.stdout.write(
       `\n[${parserName}] Completed in ${elapsed}\n` +
-        `  Pages: Total ${stats.total} | Success ${stats.success} | Failed ${stats.failed}\n`,
+        `  Pages:      Total ${stats.total} | Success ${stats.success} | Failed ${stats.failed}\n` +
+        `  Traversers: Total ${stats.traversers.total} | Success ${stats.traversers.success} | Failed ${stats.traversers.failed}\n` +
+        `  Extractors: Total ${stats.extractors.total} | Success ${stats.extractors.success} | Failed ${stats.extractors.failed}\n`,
     )
   }
 
