@@ -1,11 +1,12 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ParserConfig } from '../../domain/entities/Parser.js'
+import type { IParserLoader } from './IParserLoader.js'
 
 const isTsx = fileURLToPath(import.meta.url).endsWith('.ts')
 const parserIndexFile = isTsx ? 'index.ts' : 'index.js'
 
-export class FileParserLoader {
+export class FileParserLoader implements IParserLoader {
   constructor(private readonly parsersDir: string) {}
 
   async load(parserName: string): Promise<ParserConfig> {

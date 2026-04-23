@@ -3,7 +3,7 @@ import { Worker } from 'node:worker_threads'
 import { EventEmitter } from 'node:events'
 import { fileURLToPath } from 'node:url'
 import { resolve, dirname } from 'node:path'
-import { FileParserLoader } from '../../infrastructure/loader/FileParserLoader.js'
+import type { IParserLoader } from '../../infrastructure/loader/IParserLoader.js'
 import { createPageTask } from '../../domain/entities/PageTask.js'
 import type { WorkerOutMessage } from '../../infrastructure/worker/messages.js'
 import type { TraverserResult } from '../../domain/value-objects/TraverserResult.js'
@@ -21,7 +21,7 @@ export class DebugStepRunner extends EventEmitter {
   private worker: Worker | null = null
   private pendingReject: ((reason?: unknown) => void) | null = null
 
-  constructor(private readonly loader: FileParserLoader) {
+  constructor(private readonly loader: IParserLoader) {
     super()
   }
 
