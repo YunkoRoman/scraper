@@ -10,7 +10,8 @@
     "start": "concurrently \"npm run api:dev\" \"npm run client\"",
     "build": "tsc",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:migrate": "tsx src/infrastructure/db/migrate.ts"
   },
   "dependencies": {
     "commander": "^12.1.0",
