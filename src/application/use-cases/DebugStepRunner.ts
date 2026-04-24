@@ -34,7 +34,10 @@ export class DebugStepRunner extends EventEmitter {
     const config = await this.loader.load(parserName)
     const step = config.steps.get(stepName as StepName)
     if (!step) throw new Error(`Step "${stepName}" not found in parser "${parserName}"`)
-    if (!config.filePath) throw new Error('filePath missing — use FileParserLoader')
+
+    if (!config.filePath && !step.code) {
+      throw new Error(`Step "${stepName}" has no filePath or code — cannot spawn worker`)
+    }
 
     const task = createPageTask(url, stepName as StepName, step.type, config.retryConfig, undefined, parentData)
 
@@ -47,9 +50,29 @@ export class DebugStepRunner extends EventEmitter {
       : resolve(__dirname, '../../infrastructure/worker/ExtractorWorker.js')
 
     const entryFile = isTsx ? bootstrapFile : jsFile
-    const workerData = isTsx
-      ? { parserFilePath: config.filePath, stepName, __workerPath: tsFile, browserSettings: config.browserSettings }
-      : { parserFilePath: config.filePath, stepName, browserSettings: config.browserSettings }
+
+    const workerData = config.filePath
+      ? (isTsx
+          ? { parserFilePath: config.filePath, stepName, __workerPath: tsFile, browserSettings: config.browserSettings }
+          : { parserFilePath: config.filePath, stepName, browserSettings: config.browserSettings })
+      : (isTsx
+          ? {
+              stepCode: step.code!,
+              stepType: step.type,
+              outputFile: step.type === 'extractor' ? (step as import('../../domain/entities/Extractor.js').Extractor).outputFile : undefined,
+              stepSettings: step.settings,
+              stepName,
+              __workerPath: tsFile,
+              browserSettings: config.browserSettings,
+            }
+          : {
+              stepCode: step.code!,
+              stepType: step.type,
+              outputFile: step.type === 'extractor' ? (step as import('../../domain/entities/Extractor.js').Extractor).outputFile : undefined,
+              stepSettings: step.settings,
+              stepName,
+              browserSettings: config.browserSettings,
+            })
 
     return new Promise((resolve, reject) => {
       this.pendingReject = reject

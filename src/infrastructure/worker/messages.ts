@@ -1,5 +1,12 @@
 import type { PageTask } from '../../domain/entities/PageTask.js'
 import type { TraverserResult } from '../../domain/value-objects/TraverserResult.js'
+import type { StepSettings } from '../../domain/value-objects/StepSettings.js'
+
+export type BrowserSettings = Pick<StepSettings, 'browser_type' | 'launchOptions' | 'contextOptions' | 'initScripts' | 'userAgent' | 'proxySettings'>
+
+export type WorkerData =
+  | { parserFilePath: string; stepName: string; browserSettings?: BrowserSettings }
+  | { stepCode: string; stepType: 'traverser' | 'extractor'; outputFile?: string; stepSettings?: StepSettings; stepName: string; browserSettings?: BrowserSettings }
 
 // Messages sent from Main → Worker
 export type WorkerInMessage =

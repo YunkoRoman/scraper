@@ -1,5 +1,6 @@
+// src/infrastructure/worker/TraverserWorker.ts
 import { parentPort, workerData } from 'node:worker_threads'
-import type { WorkerInMessage, WorkerOutMessage } from './messages.js'
+import type { WorkerInMessage, WorkerOutMessage, WorkerData } from './messages.js'
 import { pipeConsole } from './pipeConsole.js'
 import { buildContextOptions } from './buildContextOptions.js'
 import { createBrowserAdapter } from '../browser/BrowserAdapter.js'
@@ -9,13 +10,13 @@ import type { Traverser } from '../../domain/entities/Traverser.js'
 import type { ParserConfig } from '../../domain/entities/Parser.js'
 import type { StepName } from '../../domain/value-objects/StepName.js'
 import type { StepSettings } from '../../domain/value-objects/StepSettings.js'
+import { stepName } from '../../domain/value-objects/StepName.js'
 
-const { parserFilePath, stepName, browserSettings } = workerData as {
-  parserFilePath: string
-  stepName: string
-  browserSettings?: Pick<StepSettings, 'browser_type' | 'launchOptions' | 'contextOptions' | 'initScripts' | 'userAgent' | 'proxySettings'>
-}
-pipeConsole(stepName)
+const data = workerData as WorkerData
+pipeConsole(data.stepName)
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (...args: string[]) => (...a: any[]) => Promise<any>
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let adapter: BrowserAdapter<any> = createBrowserAdapter()
@@ -59,17 +60,29 @@ function enqueue(task: PageTask, step: Traverser<any>): void {
 }
 
 async function main() {
-  const mod = (await import(parserFilePath)) as { default: ParserConfig }
-  const config = mod.default
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const step = config.steps.get(stepName as StepName) as Traverser<any>
-  if (!step) throw new Error(`Step "${stepName}" not found in parser "${config.name}"`)
+  let step: Traverser<any>
+  let stepSettings: StepSettings | undefined
+
+  if ('parserFilePath' in data) {
+    const mod = (await import(data.parserFilePath)) as { default: ParserConfig }
+    const config = mod.default
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    step = config.steps.get(data.stepName as StepName) as Traverser<any>
+    if (!step) throw new Error(`Step "${data.stepName}" not found in parser "${config.name}"`)
+    stepSettings = step.settings
+  } else {
+    const run = new AsyncFunction('page', 'task', data.stepCode)
+    const { Traverser: T } = await import('../../domain/entities/Traverser.js')
+    step = new T(stepName(data.stepName), run, data.stepSettings)
+    stepSettings = data.stepSettings
+  }
 
   const mergedSettings: StepSettings = {
-    ...browserSettings,
-    ...step.settings,
-    contextOptions: buildContextOptions(browserSettings, step.settings),
-    initScripts: [...(browserSettings?.initScripts ?? []), ...(step.settings?.initScripts ?? [])],
+    ...data.browserSettings,
+    ...stepSettings,
+    contextOptions: buildContextOptions(data.browserSettings, stepSettings),
+    initScripts: [...(data.browserSettings?.initScripts ?? []), ...(stepSettings?.initScripts ?? [])],
   }
   concurrency = mergedSettings.concurrency ?? 3
   adapter = createBrowserAdapter(mergedSettings.browser_type, mergedSettings)
