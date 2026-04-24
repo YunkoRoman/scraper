@@ -27,8 +27,12 @@ export class DbParserLoader implements IParserLoader {
     for (const s of stepRows) {
       const sn = stepName(s.name)
       const settings = Object.keys(s.stepSettings as object).length ? (s.stepSettings as StepSettings) : undefined
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const run = new AsyncFunction('page', 'task', s.code) as any
+      let run: (...a: unknown[]) => Promise<unknown>
+      try {
+        run = new AsyncFunction('page', 'task', s.code)
+      } catch (err) {
+        throw new Error(`Syntax error in step "${s.name}" of parser "${row.name}": ${(err as Error).message}`)
+      }
       if (s.type === 'traverser') {
         const t = new Traverser(sn, run, settings)
         t.code = s.code

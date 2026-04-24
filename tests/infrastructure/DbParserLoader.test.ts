@@ -25,7 +25,10 @@ describe('DbParserLoader', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('throws when parser not found', async () => {
-    makeSelectChain([])
+    mockSelect.mockReturnValueOnce({
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([]),
+    })
     const loader = new DbParserLoader()
     await expect(loader.load('missing')).rejects.toThrow('Parser "missing" not found')
   })
