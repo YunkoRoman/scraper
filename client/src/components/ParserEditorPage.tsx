@@ -283,6 +283,7 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
               </div>
               <div className="flex-1 overflow-hidden">
                 <Editor
+                  key={selectedStepName ?? ''}
                   height="100%"
                   language="javascript"
                   theme={monacoTheme}

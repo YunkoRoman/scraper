@@ -46,6 +46,7 @@ export function useParserEditor(parserName: string) {
   const selectStep = useCallback((name: string) => {
     const s = steps.find((st) => st.name === name)
     if (!s) return
+    if (debounceRef.current) clearTimeout(debounceRef.current)
     setSelectedStepName(name)
     setCode(s.code)
     setSaveStatus('idle')
