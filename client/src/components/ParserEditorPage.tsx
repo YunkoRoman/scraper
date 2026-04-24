@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import Editor from '@monaco-editor/react'
 import { useParserEditor } from '../hooks/useParserEditor'
-import { createParser, updateStep, type CreateParserInput } from '../api'
+import { createParser, type CreateParserInput } from '../api'
 import { useTheme } from '../hooks/useTheme'
 
 const TRAVERSER_TEMPLATE = `// page: Playwright/Puppeteer Page
@@ -28,7 +28,7 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
   const {
     parser, steps, selectedStep, selectedStepName, code,
     saveStatus, loading, error,
-    selectStep, handleCodeChange, saveNow, addStep, removeStep, saveParserSettings,
+    selectStep, handleCodeChange, saveNow, addStep, removeStep, saveParserSettings, saveStepMeta,
   } = useParserEditor(parserName)
 
   const [newParserName, setNewParserName] = useState('')
@@ -139,6 +139,7 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
             onChange={(e) => saveParserSettings({ entryStep: e.target.value })}
             className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
           >
+            {steps.length === 0 && <option value="">— none —</option>}
             {steps.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
           </select>
         </div>
@@ -209,8 +210,9 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
                   disabled={!newStepName}
                   onClick={async () => {
                     const tmpl = newStepType === 'traverser' ? TRAVERSER_TEMPLATE : EXTRACTOR_TEMPLATE
-                    await addStep(newStepName, newStepType)
-                    handleCodeChange(tmpl)
+                    // Pass template into addStep so it's saved atomically before
+                    // selectedStepName state update is batched by React
+                    await addStep(newStepName, newStepType, tmpl)
                     setAddingStep(false)
                     setNewStepName('')
                   }}
@@ -261,9 +263,7 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
                   <input
                     key={selectedStep.name}
                     defaultValue={selectedStep.entryUrl}
-                    onBlur={async (e) => {
-                      await updateStep(parserName, selectedStep.name, { entryUrl: e.target.value })
-                    }}
+                    onBlur={(e) => saveStepMeta(selectedStep.name, { entryUrl: e.target.value })}
                     className="px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-700 bg-transparent w-56"
                     placeholder="https://..."
                   />
@@ -274,9 +274,7 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
                     <input
                       key={`out-${selectedStep.name}`}
                       defaultValue={selectedStep.outputFile ?? ''}
-                      onBlur={async (e) => {
-                        await updateStep(parserName, selectedStep.name, { outputFile: e.target.value })
-                      }}
+                      onBlur={(e) => saveStepMeta(selectedStep.name, { outputFile: e.target.value })}
                       className="px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-700 bg-transparent w-32"
                       placeholder="output.csv"
                     />
