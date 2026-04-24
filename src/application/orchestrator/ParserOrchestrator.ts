@@ -91,8 +91,10 @@ export class ParserOrchestrator extends EventEmitter {
   }
 
   private spawnWorker(step: Step): void {
-    if (!this.config.filePath) {
-      throw new Error('ParserConfig.filePath not set — load parser via FileParserLoader')
+    const hasFilePath = !!this.config.filePath
+    const hasCode = !!step.code
+    if (!hasFilePath && !hasCode) {
+      throw new Error(`Step "${step.name}" has no filePath or inline code`)
     }
     console.log(`[orchestrator] spawning worker: ${step.name} (${step.type})`)
 
@@ -107,9 +109,14 @@ export class ParserOrchestrator extends EventEmitter {
         : resolve(__dirname, '../../infrastructure/worker/ExtractorWorker.js')
 
     const entryFile = isTsx ? bootstrapFile : jsWorkerFile
-    const wData = isTsx
-      ? { parserFilePath: this.config.filePath, stepName: step.name, __workerPath: tsWorkerFile, browserSettings: this.config.browserSettings }
-      : { parserFilePath: this.config.filePath, stepName: step.name, browserSettings: this.config.browserSettings }
+    const outputFile = step.type === 'extractor' ? (step as import('../../domain/entities/Extractor.js').Extractor).outputFile : undefined
+    const wData = hasFilePath
+      ? (isTsx
+          ? { parserFilePath: this.config.filePath!, stepName: String(step.name), __workerPath: tsWorkerFile, browserSettings: this.config.browserSettings }
+          : { parserFilePath: this.config.filePath!, stepName: String(step.name), browserSettings: this.config.browserSettings })
+      : (isTsx
+          ? { stepCode: step.code!, stepType: step.type, outputFile, stepSettings: step.settings, stepName: String(step.name), __workerPath: tsWorkerFile, browserSettings: this.config.browserSettings }
+          : { stepCode: step.code!, stepType: step.type, outputFile, stepSettings: step.settings, stepName: String(step.name), browserSettings: this.config.browserSettings })
 
     console.log(`[orchestrator] worker file: ${entryFile}`)
     const worker = new Worker(entryFile, { workerData: wData })

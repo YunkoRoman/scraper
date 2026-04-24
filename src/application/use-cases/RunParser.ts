@@ -1,9 +1,9 @@
 import { ParserOrchestrator } from '../orchestrator/ParserOrchestrator.js'
-import { FileParserLoader } from '../../infrastructure/loader/FileParserLoader.js'
+import type { IParserLoader } from '../../infrastructure/loader/IParserLoader.js'
 
 export class RunParser {
   constructor(
-    private readonly loader: FileParserLoader,
+    private readonly loader: IParserLoader,
     private readonly outputDir: string,
   ) {}
 

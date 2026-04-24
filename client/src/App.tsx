@@ -82,14 +82,6 @@ export default function App() {
     setPage(p)
   }
 
-  const tabClass = (p: Page) =>
-    [
-      'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-      page === p
-        ? 'bg-emerald-600 text-white'
-        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800',
-    ].join(' ')
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white transition-colors duration-200">
       {/* Header */}
@@ -103,19 +95,6 @@ export default function App() {
           <h1 className="text-base sm:text-lg font-bold tracking-tight m-0 text-gray-900 dark:text-white">
             Scraper Platform
           </h1>
-
-          {/* Nav tabs */}
-          <nav className="flex items-center gap-1 ml-4">
-            <button onClick={() => navigate('parsers')} className={tabClass('parsers')}>
-              Parsers
-            </button>
-            <button onClick={() => navigate('debug')} className={tabClass('debug')}>
-              Debug
-            </button>
-            <button onClick={() => navigate('editor', editorParser || parsers[0] || '')} className={tabClass('editor')}>
-              Editor
-            </button>
-          </nav>
 
           <span className="ml-auto" />
             <button
