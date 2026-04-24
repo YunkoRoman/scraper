@@ -68,4 +68,4 @@ async function seed() {
   console.log('Seed complete')
 }
 
-seed().catch((err) => { console.error(err); process.exit(1) })
+seed().catch(async (err) => { console.error(err); await pool.end().catch(() => {}); process.exit(1) })
