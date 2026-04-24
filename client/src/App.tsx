@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { listParsers } from './api'
 import { ParserCard } from './components/ParserCard'
 import { DebugPage } from './components/DebugPage'
+import { ParserEditorPage } from './components/ParserEditorPage'
 import { useTheme } from './hooks/useTheme'
 
 function SunIcon() {
@@ -32,16 +33,26 @@ function MonitorIcon() {
   )
 }
 
-type Page = 'parsers' | 'debug'
+type Page = 'parsers' | 'debug' | 'editor'
 
 function getPageFromHash(): Page {
-  return window.location.hash === '#/debug' ? 'debug' : 'parsers'
+  const hash = window.location.hash
+  if (hash === '#/debug') return 'debug'
+  if (hash.startsWith('#/editor/')) return 'editor'
+  return 'parsers'
+}
+
+function getEditorParserFromHash(): string {
+  const hash = window.location.hash
+  if (hash.startsWith('#/editor/')) return decodeURIComponent(hash.slice(9))
+  return ''
 }
 
 export default function App() {
   const [parsers, setParsers] = useState<string[]>([])
   const [apiError, setApiError] = useState<string | null>(null)
   const [page, setPage] = useState<Page>(getPageFromHash)
+  const [editorParser, setEditorParser] = useState<string>(getEditorParserFromHash)
   const { theme, toggle } = useTheme()
 
   useEffect(() => {
@@ -51,13 +62,23 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const handler = () => setPage(getPageFromHash())
+    const handler = () => {
+      setPage(getPageFromHash())
+      setEditorParser(getEditorParserFromHash())
+    }
     window.addEventListener('hashchange', handler)
     return () => window.removeEventListener('hashchange', handler)
   }, [])
 
-  function navigate(p: Page) {
-    window.location.hash = p === 'debug' ? '#/debug' : '#/'
+  function navigate(p: Page, parserName?: string) {
+    if (p === 'editor' && parserName !== undefined) {
+      window.location.hash = parserName ? `#/editor/${encodeURIComponent(parserName)}` : '#/editor/'
+      setEditorParser(parserName)
+    } else if (p === 'debug') {
+      window.location.hash = '#/debug'
+    } else {
+      window.location.hash = '#/'
+    }
     setPage(p)
   }
 
@@ -91,11 +112,12 @@ export default function App() {
             <button onClick={() => navigate('debug')} className={tabClass('debug')}>
               Debug
             </button>
+            <button onClick={() => navigate('editor', editorParser || parsers[0] || '')} className={tabClass('editor')}>
+              Editor
+            </button>
           </nav>
 
-          <span className="ml-auto text-xs text-gray-400 dark:text-gray-500 hidden sm:inline">
-            {parsers.length} parser{parsers.length !== 1 ? 's' : ''} found
-          </span>
+          <span className="ml-auto" />
             <button
               onClick={toggle}
               className="ml-2 sm:ml-3 p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors flex items-center justify-center"
@@ -121,6 +143,12 @@ export default function App() {
               </p>
             </div>
           </div>
+        ) : page === 'editor' ? (
+          <ParserEditorPage
+            parserName={editorParser}
+            onNavigateToParsers={() => navigate('parsers')}
+            onParserSelect={(name) => navigate('editor', name)}
+          />
         ) : page === 'debug' ? (
           <DebugPage />
         ) : parsers.length === 0 ? (
@@ -135,9 +163,20 @@ export default function App() {
           </div>
         ) : (
           <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">
+                {parsers.length} parser{parsers.length !== 1 ? 's' : ''}
+              </span>
+              <button
+                onClick={() => navigate('editor', '')}
+                className="px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
+              >
+                + New Parser
+              </button>
+            </div>
             <div className="grid gap-4 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {parsers.map((name) => (
-                <ParserCard key={name} name={name} />
+                <ParserCard key={name} name={name} onEdit={() => navigate('editor', name)} />
               ))}
             </div>
           </div>

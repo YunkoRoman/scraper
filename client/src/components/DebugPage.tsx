@@ -1,6 +1,6 @@
 // client/src/components/DebugPage.tsx
 import { useEffect, useRef, useState } from 'react'
-import { listParsers, listSteps } from '../api'
+import { listParsers, listSteps, getStep } from '../api'
 import type { StepInfo } from '../api'
 import { JsonEditor } from './JsonEditor'
 import { useDebugRun } from '../hooks/useDebugRun'
@@ -72,6 +72,13 @@ export function DebugPage() {
         setSelectedStep('')
       })
   }, [selectedParser])
+
+  useEffect(() => {
+    if (!selectedParser || !selectedStep) return
+    getStep(selectedParser, selectedStep)
+      .then((s) => { if (s.entryUrl) setUrl(s.entryUrl) })
+      .catch(() => {})
+  }, [selectedParser, selectedStep])
 
   // Auto-scroll console
   useEffect(() => {

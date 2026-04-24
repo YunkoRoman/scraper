@@ -6,6 +6,7 @@ import type { OutputFile } from '../api'
 
 interface Props {
   name: string
+  onEdit: () => void
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -22,7 +23,7 @@ const STATUS_LABEL: Record<string, string> = {
   error: 'Error',
 }
 
-export function ParserCard({ name }: Props) {
+export function ParserCard({ name, onEdit }: Props) {
   const { status, stats, errorMessage } = useParserSSE(name)
   const [loading, setLoading] = useState(false)
   const [files, setFiles] = useState<OutputFile[]>([])
@@ -70,6 +71,12 @@ export function ParserCard({ name }: Props) {
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${STATUS_BADGE[status]}`}>
           {STATUS_LABEL[status]}
         </span>
+        <button
+          onClick={onEdit}
+          className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 hover:bg-emerald-100 dark:hover:bg-emerald-900 text-gray-600 dark:text-gray-300 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
+        >
+          Edit
+        </button>
       </div>
 
       {/* Error message */}
