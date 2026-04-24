@@ -83,7 +83,13 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
   } = useParserEditor(parserName)
 
   const [newParserName, setNewParserName] = useState('')
+  const [newParserEntryUrl, setNewParserEntryUrl] = useState('')
   const [newParserBrowser, setNewParserBrowser] = useState('playwright')
+  const [newParserRetries, setNewParserRetries] = useState(5)
+  const [newParserDedup, setNewParserDedup] = useState(true)
+  const [newParserQuota, setNewParserQuota] = useState('')
+  const [newParserBrowserJson, setNewParserBrowserJson] = useState('')
+  const [newParserBrowserJsonError, setNewParserBrowserJsonError] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
@@ -98,34 +104,155 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
 
   // New parser creation form
   if (!parserName) {
+    const fieldClass =
+      'w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm ' +
+      'text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-emerald-400'
+    const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1'
+
+    async function handleCreate() {
+      if (!newParserName) return
+      let browserSettings: Record<string, unknown> | undefined
+      if (newParserBrowserJson.trim()) {
+        try {
+          browserSettings = JSON.parse(newParserBrowserJson)
+          setNewParserBrowserJsonError(false)
+        } catch {
+          setNewParserBrowserJsonError(true)
+          return
+        }
+      }
+      setCreating(true)
+      setCreateError(null)
+      try {
+        const p = await createParser({
+          name: newParserName,
+          entryUrl: newParserEntryUrl || undefined,
+          browserType: newParserBrowser,
+          retryConfig: { maxRetries: newParserRetries },
+          deduplication: newParserDedup,
+          concurrentQuota: newParserQuota ? parseInt(newParserQuota, 10) : null,
+          browserSettings,
+        } satisfies CreateParserInput)
+        onParserSelect(p.name)
+      } catch (e) {
+        setCreateError((e as Error).message)
+      } finally {
+        setCreating(false)
+      }
+    }
+
     return (
-      <div className="px-4 sm:px-6 lg:px-8 py-8 max-w-md">
-        <h2 className="text-lg font-semibold mb-4">New Parser</h2>
+      <div className="px-4 sm:px-6 lg:px-8 py-8 max-w-lg">
+        <h2 className="text-lg font-semibold mb-5">New Parser</h2>
         {createError && <p className="text-red-500 text-sm mb-3">{createError}</p>}
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
+
+          {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+            <label className={labelClass}>Name <span className="text-red-500">*</span></label>
             <input
               value={newParserName}
               onChange={(e) => setNewParserName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
               placeholder="my-parser"
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm"
+              className={fieldClass}
             />
-            <p className="text-xs text-gray-400 mt-1">Lowercase, hyphens allowed</p>
+            <p className="text-xs text-gray-400 mt-1">Lowercase letters, numbers, hyphens</p>
           </div>
+
+          {/* Entry URL */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Browser</label>
+            <label className={labelClass}>Entry URL</label>
+            <input
+              type="url"
+              value={newParserEntryUrl}
+              onChange={(e) => setNewParserEntryUrl(e.target.value)}
+              placeholder="https://example.com"
+              className={fieldClass}
+            />
+          </div>
+
+          {/* Browser */}
+          <div>
+            <label className={labelClass}>Browser</label>
             <select
               value={newParserBrowser}
               onChange={(e) => setNewParserBrowser(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm"
+              className={fieldClass}
             >
               <option value="playwright">Playwright</option>
               <option value="playwright-stealth">Playwright Stealth</option>
               <option value="puppeteer">Puppeteer</option>
             </select>
           </div>
-          <div className="flex gap-2 mt-2">
+
+          {/* Retries + Quota row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Max Retries</label>
+              <input
+                type="number"
+                min={0}
+                max={20}
+                value={newParserRetries}
+                onChange={(e) => setNewParserRetries(parseInt(e.target.value, 10) || 0)}
+                className={fieldClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>
+                Concurrent Quota <span className="font-normal text-gray-400 text-xs">(blank = ∞)</span>
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={newParserQuota}
+                onChange={(e) => setNewParserQuota(e.target.value)}
+                placeholder="unlimited"
+                className={fieldClass}
+              />
+            </div>
+          </div>
+
+          {/* Deduplication */}
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={newParserDedup}
+              onChange={(e) => setNewParserDedup(e.target.checked)}
+              className="accent-emerald-600 w-4 h-4"
+            />
+            Deduplication (skip already-visited URLs)
+          </label>
+
+          {/* Browser Settings JSON (advanced) */}
+          <details>
+            <summary className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+              Browser Settings (advanced)
+            </summary>
+            <div className="mt-2">
+              <textarea
+                value={newParserBrowserJson}
+                onChange={(e) => { setNewParserBrowserJson(e.target.value); setNewParserBrowserJsonError(false) }}
+                rows={5}
+                spellCheck={false}
+                placeholder={'{\n  "userAgent": "Mozilla/5.0 ...",\n  "contextOptions": { "locale": "en-US" }\n}'}
+                className={[
+                  'w-full rounded-lg border px-3 py-2 font-mono text-xs resize-y bg-white dark:bg-gray-900',
+                  'text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600',
+                  newParserBrowserJsonError
+                    ? 'border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400'
+                    : 'border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-emerald-400',
+                ].join(' ')}
+              />
+              {newParserBrowserJsonError && (
+                <p className="text-xs text-red-500 mt-1">Invalid JSON</p>
+              )}
+            </div>
+          </details>
+
+          {/* Actions */}
+          <div className="flex gap-2 pt-1">
             <button
               onClick={onNavigateToParsers}
               className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -134,23 +261,13 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
             </button>
             <button
               disabled={!newParserName || creating}
-              onClick={async () => {
-                setCreating(true)
-                setCreateError(null)
-                try {
-                  const p = await createParser({ name: newParserName, browserType: newParserBrowser } as CreateParserInput)
-                  onParserSelect(p.name)
-                } catch (e) {
-                  setCreateError((e as Error).message)
-                } finally {
-                  setCreating(false)
-                }
-              }}
+              onClick={handleCreate}
               className="flex-1 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-medium transition-colors"
             >
               {creating ? 'Creating...' : 'Create Parser'}
             </button>
           </div>
+
         </div>
       </div>
     )

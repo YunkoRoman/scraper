@@ -113,6 +113,10 @@ export interface CreateParserInput {
   entryUrl?: string
   entryStep?: string
   browserType?: string
+  browserSettings?: Record<string, unknown>
+  retryConfig?: { maxRetries: number }
+  deduplication?: boolean
+  concurrentQuota?: number | null
 }
 
 export interface UpdateParserInput {
