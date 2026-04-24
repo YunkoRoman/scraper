@@ -10,6 +10,10 @@ import { ParserRunnerService } from '../application/services/ParserRunnerService
 import type { RunStats } from '../domain/entities/ParserRun.js'
 import type { Response } from 'express'
 import { DebugStepRunner } from '../application/use-cases/DebugStepRunner.js'
+import { DbParserLoader } from '../infrastructure/loader/DbParserLoader.js'
+import { db } from '../infrastructure/db/client.js'
+import { parsers as parsersTable, steps as stepsTable } from '../infrastructure/db/schema.js'
+import { eq, and } from 'drizzle-orm'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const parsersDir = resolve(__dirname, '../../src/parsers')
@@ -18,6 +22,7 @@ const outputDir = resolve(process.cwd(), 'output')
 const loader = new FileParserLoader(parsersDir)
 const runParser = new RunParser(loader, outputDir)
 const runner = new ParserRunnerService(runParser)
+const dbLoader = new DbParserLoader()
 
 const sseClients = new Map<string, Set<Response>>()
 
@@ -44,14 +49,85 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
+// GET /api/parsers — list from DB
 app.get('/api/parsers', async (_req, res) => {
   try {
-    const entries = await readdir(parsersDir, { withFileTypes: true })
-    const parsers = entries.filter((e) => e.isDirectory()).map((e) => e.name)
-    res.json({ parsers })
+    const rows = await db.select({ name: parsersTable.name }).from(parsersTable)
+    res.json({ parsers: rows.map((r) => r.name) })
   } catch {
     res.json({ parsers: [] })
   }
+})
+
+// POST /api/parsers — create parser
+app.post('/api/parsers', async (req, res) => {
+  const { name, entryUrl, entryStep, browserType, browserSettings, retryConfig, deduplication, concurrentQuota } = req.body as {
+    name: string
+    entryUrl?: string
+    entryStep?: string
+    browserType?: string
+    browserSettings?: object
+    retryConfig?: { maxRetries: number }
+    deduplication?: boolean
+    concurrentQuota?: number
+  }
+  if (!name) { res.status(400).json({ error: 'name is required' }); return }
+  if (!/^[a-z0-9_-]+$/i.test(name)) { res.status(400).json({ error: 'name must be alphanumeric with hyphens/underscores' }); return }
+  try {
+    const [row] = await db.insert(parsersTable).values({
+      name,
+      entryUrl: entryUrl ?? '',
+      entryStep: entryStep ?? '',
+      browserType: browserType ?? 'playwright',
+      browserSettings: browserSettings ?? {},
+      retryConfig: retryConfig ?? { maxRetries: 5 },
+      deduplication: deduplication ?? true,
+      concurrentQuota: concurrentQuota ?? null,
+    }).returning()
+    res.status(201).json({ parser: row })
+  } catch (err) {
+    const msg = (err as Error).message
+    if (msg.includes('unique')) { res.status(409).json({ error: `Parser "${name}" already exists` }); return }
+    res.status(500).json({ error: msg })
+  }
+})
+
+// GET /api/parsers/:name — get parser with steps metadata
+app.get('/api/parsers/:name', async (req, res) => {
+  const { name } = req.params
+  const [parserRow] = await db.select().from(parsersTable).where(eq(parsersTable.name, name))
+  if (!parserRow) { res.status(404).json({ error: `Parser "${name}" not found` }); return }
+  const stepRows = await db.select().from(stepsTable)
+    .where(eq(stepsTable.parserId, parserRow.id))
+    .orderBy(stepsTable.position)
+  res.json({ parser: parserRow, steps: stepRows })
+})
+
+// PUT /api/parsers/:name — update parser metadata
+app.put('/api/parsers/:name', async (req, res) => {
+  const { name } = req.params
+  const [row] = await db.select({ id: parsersTable.id }).from(parsersTable).where(eq(parsersTable.name, name))
+  if (!row) { res.status(404).json({ error: `Parser "${name}" not found` }); return }
+  const { entryUrl, entryStep, browserType, browserSettings, retryConfig, deduplication, concurrentQuota } = req.body
+  const [updated] = await db.update(parsersTable).set({
+    ...(entryUrl !== undefined && { entryUrl }),
+    ...(entryStep !== undefined && { entryStep }),
+    ...(browserType !== undefined && { browserType }),
+    ...(browserSettings !== undefined && { browserSettings }),
+    ...(retryConfig !== undefined && { retryConfig }),
+    ...(deduplication !== undefined && { deduplication }),
+    ...(concurrentQuota !== undefined && { concurrentQuota }),
+    updatedAt: new Date(),
+  }).where(eq(parsersTable.name, name)).returning()
+  res.json({ parser: updated })
+})
+
+// DELETE /api/parsers/:name
+app.delete('/api/parsers/:name', async (req, res) => {
+  const { name } = req.params
+  const deleted = await db.delete(parsersTable).where(eq(parsersTable.name, name)).returning({ id: parsersTable.id })
+  if (!deleted.length) { res.status(404).json({ error: `Parser "${name}" not found` }); return }
+  res.json({ ok: true })
 })
 
 app.post('/api/parsers/:name/start', (req, res) => {
@@ -129,20 +205,92 @@ app.get('/api/parsers/:name/files/:file', (req, res) => {
   createReadStream(filePath).pipe(res)
 })
 
-app.get('/api/parsers/:name/steps', async (req, res) => {
+// POST /api/parsers/:name/steps — create step
+app.post('/api/parsers/:name/steps', async (req, res) => {
   const { name } = req.params
+  const [parserRow] = await db.select({ id: parsersTable.id }).from(parsersTable).where(eq(parsersTable.name, name))
+  if (!parserRow) { res.status(404).json({ error: `Parser "${name}" not found` }); return }
+  const { name: stepName, type, entryUrl, outputFile, code, position } = req.body as {
+    name: string; type: 'traverser' | 'extractor'; entryUrl?: string; outputFile?: string; code?: string; position?: number
+  }
+  if (!stepName) { res.status(400).json({ error: 'name is required' }); return }
+  if (type !== 'traverser' && type !== 'extractor') { res.status(400).json({ error: 'type must be traverser or extractor' }); return }
   try {
-    const config = await loader.load(name)
-    const steps = [...config.steps.entries()].map(([sName, step]) => ({
-      name: sName,
-      type: step.type,
-    }))
-    res.json({ steps })
+    const [row] = await db.insert(stepsTable).values({
+      parserId: parserRow.id,
+      name: stepName,
+      type,
+      entryUrl: entryUrl ?? '',
+      outputFile: outputFile ?? (type === 'extractor' ? `${stepName}.csv` : null),
+      code: code ?? '',
+      position: position ?? 0,
+    }).returning()
+    res.status(201).json({ step: row })
   } catch (err) {
     const msg = (err as Error).message
-    const status = msg.includes('ENOENT') || msg.includes('not found') ? 404 : 500
-    res.status(status).json({ error: msg })
+    if (msg.includes('unique')) { res.status(409).json({ error: `Step "${stepName}" already exists` }); return }
+    res.status(500).json({ error: msg })
   }
+})
+
+// GET /api/parsers/:name/steps — list steps from DB
+app.get('/api/parsers/:name/steps', async (req, res) => {
+  const { name } = req.params
+  const [parserRow] = await db.select({ id: parsersTable.id }).from(parsersTable).where(eq(parsersTable.name, name))
+  if (!parserRow) { res.status(404).json({ error: `Parser "${name}" not found` }); return }
+  const stepRows = await db.select({
+    name: stepsTable.name,
+    type: stepsTable.type,
+    position: stepsTable.position,
+  }).from(stepsTable).where(eq(stepsTable.parserId, parserRow.id)).orderBy(stepsTable.position)
+  res.json({ steps: stepRows })
+})
+
+// GET /api/parsers/:name/steps/:step — get step with code
+app.get('/api/parsers/:name/steps/:step', async (req, res) => {
+  const { name, step } = req.params
+  const [parserRow] = await db.select({ id: parsersTable.id }).from(parsersTable).where(eq(parsersTable.name, name))
+  if (!parserRow) { res.status(404).json({ error: `Parser "${name}" not found` }); return }
+  const [stepRow] = await db.select().from(stepsTable).where(and(eq(stepsTable.parserId, parserRow.id), eq(stepsTable.name, step)))
+  if (!stepRow) { res.status(404).json({ error: `Step "${step}" not found` }); return }
+  res.json({ step: stepRow })
+})
+
+// PUT /api/parsers/:name/steps/:step — update step (autosave target)
+app.put('/api/parsers/:name/steps/:step', async (req, res) => {
+  const { name, step } = req.params
+  const [parserRow] = await db.select({ id: parsersTable.id }).from(parsersTable).where(eq(parsersTable.name, name))
+  if (!parserRow) { res.status(404).json({ error: `Parser "${name}" not found` }); return }
+  const [stepRow] = await db.select({ id: stepsTable.id }).from(stepsTable).where(and(eq(stepsTable.parserId, parserRow.id), eq(stepsTable.name, step)))
+  if (!stepRow) { res.status(404).json({ error: `Step "${step}" not found` }); return }
+  const { name: newName, type, entryUrl, outputFile, code, stepSettings, position } = req.body
+  try {
+    const [updated] = await db.update(stepsTable).set({
+      ...(newName !== undefined && { name: newName }),
+      ...(type !== undefined && { type }),
+      ...(entryUrl !== undefined && { entryUrl }),
+      ...(outputFile !== undefined && { outputFile }),
+      ...(code !== undefined && { code }),
+      ...(stepSettings !== undefined && { stepSettings }),
+      ...(position !== undefined && { position }),
+      updatedAt: new Date(),
+    }).where(eq(stepsTable.id, stepRow.id)).returning()
+    res.json({ step: updated })
+  } catch (err) {
+    const msg = (err as Error).message
+    if (msg.includes('unique')) { res.status(409).json({ error: `Step name already exists` }); return }
+    res.status(500).json({ error: msg })
+  }
+})
+
+// DELETE /api/parsers/:name/steps/:step
+app.delete('/api/parsers/:name/steps/:step', async (req, res) => {
+  const { name, step } = req.params
+  const [parserRow] = await db.select({ id: parsersTable.id }).from(parsersTable).where(eq(parsersTable.name, name))
+  if (!parserRow) { res.status(404).json({ error: `Parser "${name}" not found` }); return }
+  const deleted = await db.delete(stepsTable).where(and(eq(stepsTable.parserId, parserRow.id), eq(stepsTable.name, step))).returning({ id: stepsTable.id })
+  if (!deleted.length) { res.status(404).json({ error: `Step "${step}" not found` }); return }
+  res.json({ ok: true })
 })
 
 app.post('/api/parsers/:name/steps/:step/debug', async (req, res) => {
@@ -165,7 +313,7 @@ app.post('/api/parsers/:name/steps/:step/debug', async (req, res) => {
 
   const send = (payload: object) => res.write(`data: ${JSON.stringify(payload)}\n\n`)
 
-  const debugRunner = new DebugStepRunner(loader)
+  const debugRunner = new DebugStepRunner(dbLoader)
   debugRunner.on('log', (log) => send({ type: 'log', ...log }))
   debugRunner.on('result', (result) => send({ type: 'result', result }))
   let cancelled = false
