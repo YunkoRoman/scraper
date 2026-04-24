@@ -3,6 +3,7 @@ import { useState } from 'react'
 import Editor from '@monaco-editor/react'
 import { useParserEditor } from '../hooks/useParserEditor'
 import { StepDebugPanel } from './StepDebugPanel'
+import { ParserSettingsPanel } from './ParserSettingsPanel'
 import { createParser, type CreateParserInput } from '../api'
 import { useTheme } from '../hooks/useTheme'
 
@@ -15,6 +16,55 @@ const EXTRACTOR_TEMPLATE = `// page: Playwright/Puppeteer Page
 // task: { url: string, parentData?: Record<string, unknown> }
 const title = await page.$eval('h1', el => el.textContent?.trim() ?? '').catch(() => '')
 return [{ title, __url: task.url }]`
+
+function StepSettingsBar({
+  step,
+  onSave,
+}: {
+  step: import('../api').StepRow
+  onSave: (settings: Record<string, unknown>) => void
+}) {
+  const [json, setJson] = useState(
+    Object.keys(step.stepSettings).length ? JSON.stringify(step.stepSettings, null, 2) : '',
+  )
+  const [error, setError] = useState(false)
+
+  function handleBlur() {
+    const s = json.trim()
+    if (!s) { setError(false); onSave({}); return }
+    try {
+      onSave(JSON.parse(s))
+      setError(false)
+    } catch {
+      setError(true)
+    }
+  }
+
+  return (
+    <div className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/60 px-4 py-2">
+      <label className="block text-xs text-gray-500 font-medium mb-1">
+        Step Settings{' '}
+        <span className="font-normal text-gray-400">(concurrency, timeout, userAgent, initScripts…)</span>
+      </label>
+      <textarea
+        value={json}
+        onChange={(e) => { setJson(e.target.value); setError(false) }}
+        onBlur={handleBlur}
+        rows={4}
+        spellCheck={false}
+        placeholder={'{\n  "concurrency": 3,\n  "timeout": 30000\n}'}
+        className={[
+          'w-full max-w-xl rounded border px-3 py-2 font-mono text-xs resize-y bg-white dark:bg-gray-900',
+          'text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600',
+          error
+            ? 'border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400'
+            : 'border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-emerald-400',
+        ].join(' ')}
+      />
+      {error && <p className="text-xs text-red-500 mt-1">Invalid JSON</p>}
+    </div>
+  )
+}
 
 interface Props {
   parserName: string
@@ -41,6 +91,8 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
   const [newStepName, setNewStepName] = useState('')
   const [newStepType, setNewStepType] = useState<'traverser' | 'extractor'>('traverser')
   const [showDebug, setShowDebug] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [showStepSettings, setShowStepSettings] = useState(false)
 
   const saveStatusLabel = saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : saveStatus === 'error' ? 'Save failed' : ''
 
@@ -159,7 +211,18 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
           </select>
         </div>
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setShowSettings((v) => !v)}
+            className={[
+              'px-2.5 py-1 text-xs rounded font-medium transition-colors',
+              showSettings
+                ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
+                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800',
+            ].join(' ')}
+          >
+            ⚙ Settings
+          </button>
           <span className="text-xs text-gray-400">{saveStatusLabel}</span>
           <button
             onClick={saveNow}
@@ -170,6 +233,11 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
           </button>
         </div>
       </div>
+
+      {/* Parser settings panel */}
+      {showSettings && parser && (
+        <ParserSettingsPanel parser={parser} onSave={saveParserSettings} />
+      )}
 
       {/* Two-panel body */}
       <div className="flex flex-1 overflow-hidden">
@@ -282,18 +350,41 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
                     />
                   </div>
                 )}
-                <button
-                  onClick={() => setShowDebug((v) => !v)}
-                  className={[
-                    'ml-auto px-2.5 py-1 rounded text-xs font-semibold transition-colors',
-                    showDebug
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-emerald-100 dark:hover:bg-emerald-900 hover:text-emerald-700 dark:hover:text-emerald-300',
-                  ].join(' ')}
-                >
-                  ▶ Run
-                </button>
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    onClick={() => setShowStepSettings((v) => !v)}
+                    className={[
+                      'px-2 py-0.5 rounded text-xs transition-colors',
+                      showStepSettings
+                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
+                        : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
+                    ].join(' ')}
+                    title="Step settings"
+                  >
+                    ⚙
+                  </button>
+                  <button
+                    onClick={() => setShowDebug((v) => !v)}
+                    className={[
+                      'px-2.5 py-1 rounded text-xs font-semibold transition-colors',
+                      showDebug
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-emerald-100 dark:hover:bg-emerald-900 hover:text-emerald-700 dark:hover:text-emerald-300',
+                    ].join(' ')}
+                  >
+                    ▶ Run
+                  </button>
+                </div>
               </div>
+
+              {/* Step settings JSON */}
+              {showStepSettings && (
+                <StepSettingsBar
+                  key={selectedStep.name}
+                  step={selectedStep}
+                  onSave={(settings) => saveStepMeta(selectedStep.name, { stepSettings: settings })}
+                />
+              )}
               <div className="flex flex-1 overflow-hidden min-h-0">
                 <div className="flex-1 overflow-hidden min-w-0">
                   <Editor

@@ -138,6 +138,7 @@ export interface UpdateStepInput {
   entryUrl?: string
   outputFile?: string
   code?: string
+  stepSettings?: Record<string, unknown>
   position?: number
 }
 
