@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import Editor from '@monaco-editor/react'
 import { useParserEditor } from '../hooks/useParserEditor'
+import { StepDebugPanel } from './StepDebugPanel'
 import { createParser, type CreateParserInput } from '../api'
 import { useTheme } from '../hooks/useTheme'
 
@@ -39,6 +40,7 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
   const [addingStep, setAddingStep] = useState(false)
   const [newStepName, setNewStepName] = useState('')
   const [newStepType, setNewStepType] = useState<'traverser' | 'extractor'>('traverser')
+  const [showDebug, setShowDebug] = useState(false)
 
   const saveStatusLabel = saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : saveStatus === 'error' ? 'Save failed' : ''
 
@@ -280,23 +282,44 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
                     />
                   </div>
                 )}
+                <button
+                  onClick={() => setShowDebug((v) => !v)}
+                  className={[
+                    'ml-auto px-2.5 py-1 rounded text-xs font-semibold transition-colors',
+                    showDebug
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-emerald-100 dark:hover:bg-emerald-900 hover:text-emerald-700 dark:hover:text-emerald-300',
+                  ].join(' ')}
+                >
+                  ▶ Run
+                </button>
               </div>
-              <div className="flex-1 overflow-hidden">
-                <Editor
-                  key={selectedStepName ?? ''}
-                  height="100%"
-                  language="javascript"
-                  theme={monacoTheme}
-                  value={code}
-                  onChange={(v) => handleCodeChange(v ?? '')}
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 13,
-                    lineNumbers: 'on',
-                    scrollBeyondLastLine: false,
-                    tabSize: 2,
-                  }}
-                />
+              <div className="flex flex-1 overflow-hidden min-h-0">
+                <div className="flex-1 overflow-hidden min-w-0">
+                  <Editor
+                    key={selectedStepName ?? ''}
+                    height="100%"
+                    language="javascript"
+                    theme={monacoTheme}
+                    value={code}
+                    onChange={(v) => handleCodeChange(v ?? '')}
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 13,
+                      lineNumbers: 'on',
+                      scrollBeyondLastLine: false,
+                      tabSize: 2,
+                    }}
+                  />
+                </div>
+                {showDebug && selectedStep && (
+                  <StepDebugPanel
+                    parserName={parserName}
+                    stepName={selectedStep.name}
+                    initialUrl={selectedStep.entryUrl}
+                    onClose={() => setShowDebug(false)}
+                  />
+                )}
               </div>
             </>
           ) : (
