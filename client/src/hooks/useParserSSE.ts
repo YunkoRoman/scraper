@@ -1,12 +1,14 @@
+// client/src/hooks/useParserSSE.ts
 import { useEffect, useState } from 'react'
 import type { RunStats } from '../api'
 
-export type ParserStatus = 'idle' | 'running' | 'complete' | 'error'
+export type ParserStatus = 'idle' | 'running' | 'stopped' | 'complete' | 'error'
 
 export interface ParserState {
   status: ParserStatus
   stats: RunStats | null
   errorMessage: string | null
+  stoppedRunExists: boolean
 }
 
 export function useParserSSE(parserName: string): ParserState {
@@ -14,6 +16,7 @@ export function useParserSSE(parserName: string): ParserState {
     status: 'idle',
     stats: null,
     errorMessage: null,
+    stoppedRunExists: false,
   })
 
   useEffect(() => {
@@ -24,26 +27,33 @@ export function useParserSSE(parserName: string): ParserState {
         type: string
         running?: boolean
         stats?: RunStats | null
-        filePath?: string
+        stoppedRunExists?: boolean
         message?: string
       }
 
       switch (msg.type) {
         case 'init':
           setState({
-            status: msg.running ? 'running' : msg.stats ? 'complete' : 'idle',
+            status: msg.running
+              ? 'running'
+              : msg.stoppedRunExists
+                ? 'stopped'
+                : msg.stats
+                  ? 'complete'
+                  : 'idle',
             stats: msg.stats ?? null,
             errorMessage: null,
+            stoppedRunExists: msg.stoppedRunExists ?? false,
           })
           break
         case 'stats':
-          setState({ status: 'running', stats: msg.stats ?? null, errorMessage: null })
+          setState({ status: 'running', stats: msg.stats ?? null, errorMessage: null, stoppedRunExists: false })
           break
         case 'complete':
-          setState({ status: 'complete', stats: msg.stats ?? null, errorMessage: null })
+          setState({ status: 'complete', stats: msg.stats ?? null, errorMessage: null, stoppedRunExists: false })
           break
         case 'stopped':
-          setState((prev) => ({ ...prev, status: 'idle' }))
+          setState((prev) => ({ ...prev, status: 'stopped', stoppedRunExists: true }))
           break
         case 'error':
           setState((prev) => ({ ...prev, status: 'error', errorMessage: msg.message ?? 'Unknown error' }))
@@ -51,10 +61,7 @@ export function useParserSSE(parserName: string): ParserState {
       }
     }
 
-    es.onerror = () => {
-      // SSE reconnects automatically — don't update state on transient errors
-    }
-
+    es.onerror = () => {}
     return () => es.close()
   }, [parserName])
 

@@ -207,3 +207,78 @@ export async function updateStep(parserName: string, stepName: string, input: Up
 export async function deleteStep(parserName: string, stepName: string): Promise<void> {
   await apiRequest(`/api/parsers/${encodeURIComponent(parserName)}/steps/${encodeURIComponent(stepName)}`, { method: 'DELETE' })
 }
+
+export interface RunInfo {
+  id: string
+  parserName: string
+  status: 'running' | 'stopped' | 'completed'
+  startedAt: string
+  stoppedAt: string | null
+  stats: RunStats | null
+  isRunning?: boolean
+}
+
+export interface TaskRow {
+  id: string
+  runId: string
+  url: string
+  stepName: string
+  stepType: 'traverser' | 'extractor'
+  state: 'pending' | 'in_progress' | 'retry' | 'success' | 'failed' | 'aborted'
+  attempts: number
+  maxAttempts: number
+  error?: string | null
+  parentTaskId?: string | null
+  parentData?: Record<string, unknown> | null
+}
+
+export async function listJobs(page = 1, limit = 50): Promise<{ runs: RunInfo[]; total: number }> {
+  return apiRequest(`/api/jobs?page=${page}&limit=${limit}`)
+}
+
+export async function getJob(runId: string): Promise<RunInfo> {
+  return apiRequest(`/api/jobs/${encodeURIComponent(runId)}`)
+}
+
+export async function getJobTasks(
+  runId: string,
+  page = 1,
+  limit = 100,
+  status?: string,
+): Promise<{ tasks: TaskRow[]; total: number }> {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+  if (status) params.set('status', status)
+  return apiRequest(`/api/jobs/${encodeURIComponent(runId)}/tasks?${params}`)
+}
+
+export async function getTaskResult(runId: string, taskId: string): Promise<{ rows: Record<string, unknown>[] }> {
+  return apiRequest(`/api/jobs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/result`)
+}
+
+export async function stopJob(runId: string): Promise<void> {
+  await apiRequest(`/api/jobs/${encodeURIComponent(runId)}/stop`, { method: 'POST' })
+}
+
+export async function resumeJob(runId: string): Promise<void> {
+  await apiRequest(`/api/jobs/${encodeURIComponent(runId)}/resume`, { method: 'POST' })
+}
+
+export async function getTask(runId: string, taskId: string): Promise<TaskRow> {
+  return apiRequest(`/api/jobs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}`)
+}
+
+export async function retryTask(runId: string, taskId: string): Promise<void> {
+  await apiRequest(`/api/jobs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/retry`, { method: 'POST' })
+}
+
+export async function abortTask(runId: string, taskId: string): Promise<void> {
+  await apiRequest(`/api/jobs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/abort`, { method: 'POST' })
+}
+
+export async function resumeParser(name: string): Promise<void> {
+  const res = await fetch(`/api/parsers/${encodeURIComponent(name)}/resume`, { method: 'POST' })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { error?: string }).error ?? 'Failed to resume')
+  }
+}
