@@ -10,6 +10,7 @@ import type { RunStats } from '../domain/entities/ParserRun.js'
 import type { Response } from 'express'
 import { DebugStepRunner } from '../application/use-cases/DebugStepRunner.js'
 import { DbParserLoader } from '../infrastructure/loader/DbParserLoader.js'
+import { RunPersistenceService } from '../infrastructure/db/RunPersistenceService.js'
 import { db } from '../infrastructure/db/client.js'
 import { parsers as parsersTable, steps as stepsTable } from '../infrastructure/db/schema.js'
 import { eq, and } from 'drizzle-orm'
@@ -18,8 +19,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const outputDir = resolve(process.cwd(), 'output')
 
 const dbLoader = new DbParserLoader()
+const runPersistence = new RunPersistenceService()
 const runParser = new RunParser(dbLoader, outputDir)
-const runner = new ParserRunnerService(runParser)
+const runner = new ParserRunnerService(runParser, runPersistence)
 
 const sseClients = new Map<string, Set<Response>>()
 
@@ -151,20 +153,45 @@ app.post('/api/parsers/:name/stop', async (req, res) => {
   }
 })
 
+app.post('/api/parsers/:name/resume', (req, res) => {
+  const { name } = req.params
+  if (runner.isRunning(name)) {
+    res.status(409).json({ error: 'Already running' })
+    return
+  }
+  runner.resume(name).catch((err: Error) => {
+    console.error(`[server] resume error:`, err)
+    broadcast(name, { type: 'error', message: err.message })
+  })
+  res.json({ ok: true })
+})
+
 app.get('/api/parsers/:name/status', (req, res) => {
   const { name } = req.params
   res.json({ running: runner.isRunning(name), stats: runner.getStats(name) ?? null })
 })
 
-app.get('/api/parsers/:name/events', (req, res) => {
+app.get('/api/parsers/:name/events', async (req, res) => {
   const { name } = req.params
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
   res.flushHeaders()
 
+  const isRunning = runner.isRunning(name)
+  let stoppedRunExists = false
+  if (!isRunning) {
+    const info = await runPersistence.getLatestRunInfo(name).catch(() => null)
+    stoppedRunExists = info?.status === 'stopped'
+  }
+
   res.write(
-    `data: ${JSON.stringify({ type: 'init', running: runner.isRunning(name), stats: runner.getStats(name) ?? null })}\n\n`,
+    `data: ${JSON.stringify({
+      type: 'init',
+      running: isRunning,
+      stats: runner.getStats(name) ?? null,
+      stoppedRunExists,
+    })}\n\n`,
   )
 
   getClients(name).add(res)
@@ -324,6 +351,145 @@ app.post('/api/parsers/:name/steps/:step/debug', async (req, res) => {
     if (!(err instanceof Error && err.message === 'aborted')) send({ type: 'error', error: message })
   } finally {
     res.end()
+  }
+})
+
+// GET /api/jobs — list all runs, paginated
+app.get('/api/jobs', async (req, res) => {
+  const page  = Math.max(1, parseInt(String(req.query.page  ?? '1'),  10))
+  const limit = Math.min(100, parseInt(String(req.query.limit ?? '50'), 10))
+  try {
+    const result = await runPersistence.getAllRuns(page, limit)
+    res.json(result)
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message })
+  }
+})
+
+// GET /api/jobs/:runId/tasks/:taskId/result — extracted rows for a task
+app.get('/api/jobs/:runId/tasks/:taskId/result', async (req, res) => {
+  const { taskId } = req.params
+  try {
+    const rows = await runPersistence.getTaskResult(taskId)
+    res.json({ rows: rows ?? [] })
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message })
+  }
+})
+
+// POST /api/jobs/:runId/tasks/:taskId/retry
+app.post('/api/jobs/:runId/tasks/:taskId/retry', (req, res) => {
+  const { runId, taskId } = req.params
+  const parserName = runner.findParserByRunId(runId)
+  if (!parserName) { res.status(404).json({ error: 'No active run with this runId — resume the job first' }); return }
+  try {
+    runner.retryTask(parserName, taskId)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message })
+  }
+})
+
+// POST /api/jobs/:runId/tasks/:taskId/abort — abort a pending/in-progress task
+app.post('/api/jobs/:runId/tasks/:taskId/abort', (req, res) => {
+  const { runId, taskId } = req.params
+  const parserName = runner.findParserByRunId(runId)
+  if (!parserName) { res.status(404).json({ error: 'No active run with this runId — resume the job first' }); return }
+  try {
+    runner.abortTask(parserName, taskId)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message })
+  }
+})
+
+// GET /api/jobs/:runId/tasks/:taskId — single task metadata
+app.get('/api/jobs/:runId/tasks/:taskId', async (req, res) => {
+  const { runId, taskId } = req.params
+  try {
+    const parserName = runner.findParserByRunId(runId)
+    if (parserName) {
+      const orchestrator = runner.getOrchestrator(parserName)
+      const task = orchestrator?.getAllTasks().find((t) => t.id === taskId)
+      if (task) { res.json(task); return }
+    }
+    const task = await runPersistence.getTask(taskId)
+    if (!task) { res.status(404).json({ error: 'Task not found' }); return }
+    res.json(task)
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message })
+  }
+})
+
+// GET /api/jobs/:runId/tasks — paginated task list
+app.get('/api/jobs/:runId/tasks', async (req, res) => {
+  const { runId } = req.params
+  const page   = Math.max(1, parseInt(String(req.query.page   ?? '1'),   10))
+  const limit  = Math.min(500, parseInt(String(req.query.limit ?? '100'), 10))
+  const status = req.query.status as string | undefined
+
+  try {
+    const parserName = runner.findParserByRunId(runId)
+    const orch = parserName ? runner.getOrchestrator(parserName) : undefined
+    if (orch) {
+      const allTasks = orch.getAllTasks()
+      const filtered = status ? allTasks.filter((t) => t.state === status) : allTasks
+      const total = filtered.length
+      const tasks = filtered.slice((page - 1) * limit, page * limit)
+      res.json({ tasks, total })
+      return
+    }
+    const dbResult = await runPersistence.getRunTasks(runId, page, limit, status)
+    res.json(dbResult)
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message })
+  }
+})
+
+// GET /api/jobs/:runId — run info + stats
+app.get('/api/jobs/:runId', async (req, res) => {
+  const { runId } = req.params
+  try {
+    const { runs } = await runPersistence.getAllRuns(1, 1_000)
+    const run = runs.find((r) => r.id === runId)
+    if (!run) { res.status(404).json({ error: 'Run not found' }); return }
+    const isRunning = runner.isRunning(run.parserName) &&
+      runner.getOrchestrator(run.parserName)?.runId === runId
+    res.json({ ...run, isRunning })
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message })
+  }
+})
+
+// POST /api/jobs/:runId/stop
+app.post('/api/jobs/:runId/stop', async (req, res) => {
+  const { runId } = req.params
+  const parserName = runner.findParserByRunId(runId)
+  if (!parserName) { res.status(404).json({ error: 'No active run with this runId' }); return }
+  try {
+    await runner.stop(parserName)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message })
+  }
+})
+
+// POST /api/jobs/:runId/resume
+app.post('/api/jobs/:runId/resume', async (req, res) => {
+  const { runId } = req.params
+  try {
+    const { runs } = await runPersistence.getAllRuns(1, 1_000)
+    const run = runs.find((r) => r.id === runId)
+    if (!run) { res.status(404).json({ error: 'Run not found' }); return }
+    if (runner.isRunning(run.parserName)) {
+      res.status(409).json({ error: 'Parser already running' }); return
+    }
+    runner.resume(run.parserName).catch((err: Error) => {
+      broadcast(run.parserName, { type: 'error', message: err.message })
+    })
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message })
   }
 })
 
