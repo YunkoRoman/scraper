@@ -4,6 +4,9 @@ import { listParsers } from './api'
 import { ParserCard } from './components/ParserCard'
 import { DebugPage } from './components/DebugPage'
 import { ParserEditorPage } from './components/ParserEditorPage'
+import { JobsPage } from './components/JobsPage'
+import { JobDetailPage } from './components/JobDetailPage'
+import { TaskDetailPage } from './components/TaskDetailPage'
 import { useTheme } from './hooks/useTheme'
 
 function SunIcon() {
@@ -33,12 +36,15 @@ function MonitorIcon() {
   )
 }
 
-type Page = 'parsers' | 'debug' | 'editor'
+type Page = 'parsers' | 'debug' | 'editor' | 'jobs' | 'job-detail' | 'task-detail'
 
 function getPageFromHash(): Page {
   const hash = window.location.hash
   if (hash === '#/debug') return 'debug'
   if (hash.startsWith('#/editor/')) return 'editor'
+  if (hash.match(/^#\/jobs\/[^/]+\/tasks\//)) return 'task-detail'
+  if (hash.startsWith('#/jobs/')) return 'job-detail'
+  if (hash === '#/jobs') return 'jobs'
   return 'parsers'
 }
 
@@ -48,11 +54,27 @@ function getEditorParserFromHash(): string {
   return ''
 }
 
+function getJobRunIdFromHash(): string {
+  const hash = window.location.hash
+  if (hash.startsWith('#/jobs/')) {
+    const rest = hash.slice(7)
+    return decodeURIComponent(rest.split('/')[0])
+  }
+  return ''
+}
+
+function getTaskIdFromHash(): string {
+  const match = window.location.hash.match(/^#\/jobs\/[^/]+\/tasks\/(.+)$/)
+  return match ? decodeURIComponent(match[1]) : ''
+}
+
 export default function App() {
   const [parsers, setParsers] = useState<string[]>([])
   const [apiError, setApiError] = useState<string | null>(null)
   const [page, setPage] = useState<Page>(getPageFromHash)
   const [editorParser, setEditorParser] = useState<string>(getEditorParserFromHash)
+  const [jobRunId, setJobRunId] = useState<string>(getJobRunIdFromHash)
+  const [jobTaskId, setJobTaskId] = useState<string>(getTaskIdFromHash)
   const { theme, toggle } = useTheme()
 
   useEffect(() => {
@@ -65,17 +87,32 @@ export default function App() {
     const handler = () => {
       setPage(getPageFromHash())
       setEditorParser(getEditorParserFromHash())
+      setJobRunId(getJobRunIdFromHash())
+      setJobTaskId(getTaskIdFromHash())
     }
     window.addEventListener('hashchange', handler)
     return () => window.removeEventListener('hashchange', handler)
   }, [])
 
-  function navigate(p: Page, parserName?: string) {
-    if (p === 'editor' && parserName !== undefined) {
-      window.location.hash = parserName ? `#/editor/${encodeURIComponent(parserName)}` : '#/editor/'
-      setEditorParser(parserName)
+  function navigate(p: Page, param?: string) {
+    if (p === 'editor') {
+      window.location.hash = param ? `#/editor/${encodeURIComponent(param)}` : '#/editor/'
+      setEditorParser(param ?? '')
     } else if (p === 'debug') {
       window.location.hash = '#/debug'
+    } else if (p === 'jobs') {
+      window.location.hash = '#/jobs'
+    } else if (p === 'job-detail' && param) {
+      window.location.hash = `#/jobs/${encodeURIComponent(param)}`
+      setJobRunId(param)
+    } else if (p === 'task-detail' && param) {
+      // param format: "runId:taskId"
+      const colonIdx = param.indexOf(':')
+      const rId = param.slice(0, colonIdx)
+      const tId = param.slice(colonIdx + 1)
+      window.location.hash = `#/jobs/${encodeURIComponent(rId)}/tasks/${encodeURIComponent(tId)}`
+      setJobRunId(rId)
+      setJobTaskId(tId)
     } else {
       window.location.hash = '#/'
     }
@@ -95,6 +132,30 @@ export default function App() {
           <h1 className="text-base sm:text-lg font-bold tracking-tight m-0 text-gray-900 dark:text-white">
             Scraper Platform
           </h1>
+
+          {/* Nav */}
+          <nav className="flex items-center gap-1 ml-4">
+            <button
+              onClick={() => navigate('parsers')}
+              className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
+                page === 'parsers' || page === 'editor'
+                  ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              Parsers
+            </button>
+            <button
+              onClick={() => navigate('jobs')}
+              className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
+                page === 'jobs' || page === 'job-detail' || page === 'task-detail'
+                  ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              Jobs
+            </button>
+          </nav>
 
           <span className="ml-auto" />
             <button
@@ -130,6 +191,16 @@ export default function App() {
           />
         ) : page === 'debug' ? (
           <DebugPage />
+        ) : page === 'jobs' ? (
+          <JobsPage onViewJob={(runId) => navigate('job-detail', runId)} />
+        ) : page === 'job-detail' ? (
+          <JobDetailPage
+            runId={jobRunId}
+            onBack={() => navigate('jobs')}
+            onViewTask={(taskId) => navigate('task-detail', `${jobRunId}:${taskId}`)}
+          />
+        ) : page === 'task-detail' ? (
+          <TaskDetailPage runId={jobRunId} taskId={jobTaskId} onBack={() => navigate('job-detail', jobRunId)} />
         ) : parsers.length === 0 ? (
           <div className="text-center py-20 text-gray-400 dark:text-gray-600">
             <p className="text-lg">No parsers found</p>
@@ -155,7 +226,7 @@ export default function App() {
             </div>
             <div className="grid gap-4 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {parsers.map((name) => (
-                <ParserCard key={name} name={name} onEdit={() => navigate('editor', name)} onViewJob={() => {}} />
+                <ParserCard key={name} name={name} onEdit={() => navigate('editor', name)} onViewJob={() => navigate('jobs')} />
               ))}
             </div>
           </div>
