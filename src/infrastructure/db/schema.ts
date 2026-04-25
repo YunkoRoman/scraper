@@ -37,3 +37,31 @@ export const parsersRelations = relations(parsers, ({ many }) => ({
 export const stepsRelations = relations(steps, ({ one }) => ({
   parser: one(parsers, { fields: [steps.parserId], references: [parsers.id] }),
 }))
+
+export const parserRuns = pgTable('parser_runs', {
+  id:         uuid('id').primaryKey(),
+  parserName: text('parser_name').notNull(),
+  status:     text('status').notNull().default('running'),
+  startedAt:  timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  stoppedAt:  timestamp('stopped_at', { withTimezone: true }),
+})
+
+export const runTasks = pgTable('run_tasks', {
+  id:           uuid('id').primaryKey(),
+  runId:        uuid('run_id').notNull().references(() => parserRuns.id, { onDelete: 'cascade' }),
+  url:          text('url').notNull(),
+  stepName:     text('step_name').notNull(),
+  stepType:     text('step_type').notNull(),
+  state:        text('state').notNull(),
+  attempts:     integer('attempts').notNull().default(0),
+  maxAttempts:  integer('max_attempts').notNull(),
+  error:        text('error'),
+  parentTaskId: uuid('parent_task_id'),
+  parentData:   jsonb('parent_data'),
+  updatedAt:    timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const taskResults = pgTable('task_results', {
+  taskId: uuid('task_id').primaryKey().references(() => runTasks.id, { onDelete: 'cascade' }),
+  rows:   jsonb('rows').notNull().default([]),
+})
