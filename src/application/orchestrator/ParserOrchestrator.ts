@@ -4,6 +4,7 @@ import { resolve, dirname } from 'node:path'
 import { EventEmitter } from 'node:events'
 import type { ParserConfig } from '../../domain/entities/Parser.js'
 import { ParserRun, type RunStats } from '../../domain/entities/ParserRun.js'
+import type { PageTask } from '../../domain/entities/PageTask.js'
 import type { Step } from '../../domain/entities/Step.js'
 import { LinkDeduplicator } from '../../domain/services/LinkDeduplicator.js'
 import { CsvWriter } from '../../infrastructure/csv/CsvWriter.js'
@@ -15,7 +16,6 @@ import { PageState } from '../../domain/value-objects/PageState.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-// Detect tsx (dev) vs compiled JS to resolve worker file extension correctly
 const isTsx = __filename.endsWith('.ts')
 
 export class ParserOrchestrator extends EventEmitter {
@@ -35,11 +35,46 @@ export class ParserOrchestrator extends EventEmitter {
   constructor(
     private readonly config: ParserConfig,
     outputBaseDir: string,
+    snapshotTasks?: PageTask[],
   ) {
     super()
     this.run = new ParserRun(config.name)
+    if (snapshotTasks) {
+      for (const t of snapshotTasks) this.run.restoreTask(t)
+    }
     this.deduplicator = new LinkDeduplicator(config.deduplication)
     this.outputDir = resolve(outputBaseDir, config.name)
+  }
+
+  get runId(): string {
+    return this.run.id
+  }
+
+  getAllTasks(): PageTask[] {
+    return this.run.allTasks()
+  }
+
+  retryTask(taskId: string): void {
+    const task = this.run.getTask(taskId)
+    if (!task) throw new Error(`Task "${taskId}" not found`)
+    if (task.state !== PageState.Failed && task.state !== PageState.Aborted) {
+      throw new Error(`Task "${taskId}" is not failed or aborted (state: ${task.state})`)
+    }
+    this.run.markPending(taskId)
+    this.dispatchTask(taskId)
+  }
+
+  abortTask(taskId: string): void {
+    const task = this.run.getTask(taskId)
+    if (!task) throw new Error(`Task "${taskId}" not found`)
+    if (
+      task.state !== PageState.Pending &&
+      task.state !== PageState.InProgress &&
+      task.state !== PageState.Retry
+    ) {
+      throw new Error(`Task "${taskId}" cannot be aborted (state: ${task.state})`)
+    }
+    this.run.markAborted(taskId)
   }
 
   async start(): Promise<void> {
@@ -53,11 +88,29 @@ export class ParserOrchestrator extends EventEmitter {
       this.spawnWorker(step)
     }
 
-    const initialUrls = this.deduplicator.filter([this.config.entryUrl])
-    const entryStepType = this.config.steps.get(this.config.entryStep)?.type ?? 'traverser'
-    for (const url of initialUrls) {
-      const task = this.run.addTask(url, this.config.entryStep, entryStepType, this.config.retryConfig)
-      this.dispatchTask(task.id)
+    const snapshotTasks = this.run.allTasks()
+    if (snapshotTasks.length > 0) {
+      // Resume mode: seed deduplicator with succeeded URLs, re-dispatch aborted/pending tasks
+      const successUrls = snapshotTasks
+        .filter((t) => t.state === PageState.Success)
+        .map((t) => t.url)
+      this.deduplicator.seed(successUrls)
+
+      const toDispatch = snapshotTasks.filter(
+        (t) => t.state === PageState.Aborted || t.state === PageState.Pending || t.state === PageState.Retry,
+      )
+      for (const task of toDispatch) {
+        this.run.markPending(task.id)
+        this.dispatchTask(task.id)
+      }
+    } else {
+      // Fresh start
+      const initialUrls = this.deduplicator.filter([this.config.entryUrl])
+      const entryStepType = this.config.steps.get(this.config.entryStep)?.type ?? 'traverser'
+      for (const url of initialUrls) {
+        const task = this.run.addTask(url, this.config.entryStep, entryStepType, this.config.retryConfig)
+        this.dispatchTask(task.id)
+      }
     }
 
     this.emit('stats', this.run.getStats())
@@ -68,7 +121,11 @@ export class ParserOrchestrator extends EventEmitter {
   async stop(): Promise<void> {
     this.stopped = true
     for (const task of this.run.allTasks()) {
-      if (task.state === PageState.Pending || task.state === PageState.Retry) {
+      if (
+        task.state === PageState.Pending ||
+        task.state === PageState.Retry ||
+        task.state === PageState.InProgress
+      ) {
         this.run.markAborted(task.id)
       }
     }
@@ -77,7 +134,6 @@ export class ParserOrchestrator extends EventEmitter {
         new Promise<void>((resolve) => {
           worker.once('exit', () => resolve())
           worker.postMessage({ type: 'STOP' })
-          // Forcefully terminate if worker doesn't exit within 5s
           setTimeout(() => worker.terminate().then(() => resolve()).catch(() => resolve()), 5_000)
         }),
     )
@@ -96,7 +152,6 @@ export class ParserOrchestrator extends EventEmitter {
     if (!hasFilePath && !hasCode) {
       throw new Error(`Step "${step.name}" has no filePath or inline code`)
     }
-    console.log(`[orchestrator] spawning worker: ${step.name} (${step.type})`)
 
     const bootstrapFile = resolve(__dirname, '../../infrastructure/worker/worker-bootstrap.js')
     const tsWorkerFile =
@@ -109,7 +164,11 @@ export class ParserOrchestrator extends EventEmitter {
         : resolve(__dirname, '../../infrastructure/worker/ExtractorWorker.js')
 
     const entryFile = isTsx ? bootstrapFile : jsWorkerFile
-    const outputFile = step.type === 'extractor' ? (step as import('../../domain/entities/Extractor.js').Extractor).outputFile : undefined
+    const outputFile =
+      step.type === 'extractor'
+        ? (step as import('../../domain/entities/Extractor.js').Extractor).outputFile
+        : undefined
+
     const wData = hasFilePath
       ? (isTsx
           ? { parserFilePath: this.config.filePath!, stepName: String(step.name), __workerPath: tsWorkerFile, browserSettings: this.config.browserSettings }
@@ -118,7 +177,6 @@ export class ParserOrchestrator extends EventEmitter {
           ? { stepCode: step.code!, stepType: step.type, outputFile, stepSettings: step.settings, stepName: String(step.name), __workerPath: tsWorkerFile, browserSettings: this.config.browserSettings }
           : { stepCode: step.code!, stepType: step.type, outputFile, stepSettings: step.settings, stepName: String(step.name), browserSettings: this.config.browserSettings })
 
-    console.log(`[orchestrator] worker file: ${entryFile}`)
     const worker = new Worker(entryFile, { workerData: wData })
     worker.on('message', (msg: WorkerOutMessage) => this.handleWorkerMessage(msg))
     worker.on('error', (err) => this.emit('error', err))
@@ -126,6 +184,7 @@ export class ParserOrchestrator extends EventEmitter {
   }
 
   private handleWorkerMessage(msg: WorkerOutMessage): void {
+    if (this.stopped) return
     switch (msg.type) {
       case 'LINKS_DISCOVERED': {
         const newLinks = new Set(this.deduplicator.filter(msg.items.map((i) => i.link)))
@@ -154,11 +213,13 @@ export class ParserOrchestrator extends EventEmitter {
           }
           this.writeCsvRow(msg.outputFile, stringRow)
         }
+        this.emit('data_extracted', { taskId: msg.taskId, rows: msg.rows })
         break
       }
       case 'PAGE_SUCCESS': {
         this.globalActive--
         this.run.markSuccess(msg.taskId)
+        this.emit('task_done', this.run.getTask(msg.taskId)!)
         this.emit('stats', this.run.getStats())
         this.flushDispatchQueue()
         this.checkCompletion()
@@ -179,6 +240,7 @@ export class ParserOrchestrator extends EventEmitter {
           this.dispatchTask(msg.taskId)
         } else {
           this.run.markFailed(msg.taskId, msg.error)
+          this.emit('task_done', this.run.getTask(msg.taskId)!)
           this.emit('stats', this.run.getStats())
           this.checkCompletion()
         }
@@ -204,10 +266,12 @@ export class ParserOrchestrator extends EventEmitter {
     const worker = this.workers.get(task.stepName)
     if (!worker) {
       this.run.markFailed(taskId, `No worker for step "${task.stepName}"`)
+      this.emit('task_done', this.run.getTask(taskId)!)
       this.emit('stats', this.run.getStats())
       this.checkCompletion()
       return
     }
+    this.run.markInProgress(taskId)
     this.globalActive++
     worker.postMessage({ type: 'PROCESS_PAGE', task })
   }
