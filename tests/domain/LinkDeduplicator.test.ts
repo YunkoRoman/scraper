@@ -27,4 +27,17 @@ describe('LinkDeduplicator', () => {
     dedup.filter(['https://a.com'])
     expect(dedup.filter(['https://a.com'])).toEqual(['https://a.com'])
   })
+
+  it('seed pre-populates seen set so seeded URLs are filtered out', () => {
+    const dedup = new LinkDeduplicator()
+    dedup.seed(['https://a.com/page', 'https://b.com'])
+    const result = dedup.filter(['https://a.com/page', 'https://c.com'])
+    expect(result).toEqual(['https://c.com'])
+  })
+
+  it('seed respects URL normalization', () => {
+    const dedup = new LinkDeduplicator()
+    dedup.seed(['https://a.com/page/'])   // trailing slash variant
+    expect(dedup.filter(['https://a.com/page'])).toEqual([])
+  })
 })

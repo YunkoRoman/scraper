@@ -3,6 +3,12 @@ export class LinkDeduplicator {
 
   constructor(private readonly enabled: boolean = true) {}
 
+  seed(urls: string[]): void {
+    for (const url of urls) {
+      this.seen.add(this.normalize(url))
+    }
+  }
+
   filter(urls: string[]): string[] {
     if (!this.enabled) return urls
     const result: string[] = []
