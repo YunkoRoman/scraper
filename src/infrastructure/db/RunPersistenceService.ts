@@ -179,6 +179,12 @@ export class RunPersistenceService {
     return { runId: info.id, tasks }
   }
 
+  async resetFailedTasks(runId: string): Promise<void> {
+    await db.update(runTasks)
+      .set({ state: 'pending', error: null, attempts: 0, updatedAt: new Date() })
+      .where(and(eq(runTasks.runId, runId), eq(runTasks.state, 'failed')))
+  }
+
   private async _bulkUpsertTasks(runId: string, tasks: PageTask[]): Promise<void> {
     if (tasks.length === 0) return
     for (const task of tasks) {

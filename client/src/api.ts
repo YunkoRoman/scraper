@@ -271,6 +271,10 @@ export async function retryTask(runId: string, taskId: string): Promise<void> {
   await apiRequest(`/api/jobs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/retry`, { method: 'POST' })
 }
 
+export async function retryAllFailed(runId: string): Promise<void> {
+  await apiRequest(`/api/jobs/${encodeURIComponent(runId)}/retry-failed`, { method: 'POST' })
+}
+
 export async function abortTask(runId: string, taskId: string): Promise<void> {
   await apiRequest(`/api/jobs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/abort`, { method: 'POST' })
 }

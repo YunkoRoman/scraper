@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { getJob, getJobTasks, getTaskResult, stopJob, resumeJob, retryTask } from '../api'
+import { getJob, getJobTasks, getTaskResult, stopJob, resumeJob, retryTask, retryAllFailed } from '../api'
 import type { RunInfo, TaskRow } from '../api'
 
 const STATE_BADGE: Record<string, string> = {
@@ -92,6 +92,14 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
     } finally { setActionLoading(false) }
   }
 
+  async function handleRetryAllFailed() {
+    setActionLoading(true)
+    setActionError(null)
+    try { await retryAllFailed(runId); await loadRun() } catch (e) {
+      setActionError((e as Error).message)
+    } finally { setActionLoading(false) }
+  }
+
   async function handleRetry(task: TaskRow) {
     await retryTask(runId, task.id).catch(console.error)
     loadTasks(page, statusFilter)
@@ -148,6 +156,11 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
                 <button onClick={handleResume} disabled={actionLoading}
                   className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white font-semibold disabled:opacity-50 transition-colors">
                   {actionLoading ? 'Resuming…' : 'Resume Job'}
+                </button>
+              ) : (run?.status === 'failed' || run?.status === 'completed') && (stats?.failed ?? 0) > 0 ? (
+                <button onClick={handleRetryAllFailed} disabled={actionLoading}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-white font-semibold disabled:opacity-50 transition-colors">
+                  {actionLoading ? 'Starting…' : `Retry Failed (${stats!.failed})`}
                 </button>
               ) : null}
               <button onClick={() => { loadRun(); loadTasks(page, statusFilter) }}

@@ -108,6 +108,53 @@ export class ParserRunnerService extends EventEmitter {
     orchestrator.abortTask(taskId)
   }
 
+  async retryFailed(runId: string): Promise<void> {
+    const runInfo = await this.runPersistence.getRunById(runId)
+    if (!runInfo) throw new Error(`Run "${runId}" not found`)
+    const parserName = runInfo.parserName
+    if (this.activeRuns.has(parserName)) {
+      throw new Error(`Parser "${parserName}" is already running`)
+    }
+
+    await this.runPersistence.resetFailedTasks(runId)
+    const { tasks } = await this.runPersistence.getRunTasks(runId, 1, 10_000)
+
+    const ref = { orchestrator: null as ParserOrchestrator | null }
+    const onComplete = async (stats: unknown) => {
+      const s = stats as RunStats
+      this.lastStats.set(parserName, s)
+      await this.runPersistence.markRunCompleted(ref.orchestrator!.runId, ref.orchestrator!.getAllTasks()).catch(console.error)
+      this.emit('complete', parserName, s)
+      this.activeRuns.delete(parserName)
+    }
+    ref.orchestrator = await this.runParser.resume(
+      parserName,
+      runId,
+      tasks.map((t) => ({
+        id:           t.id,
+        url:          t.url,
+        stepName:     t.stepName as any,
+        stepType:     t.stepType,
+        state:        t.state as any,
+        attempts:     t.attempts,
+        maxAttempts:  t.maxAttempts,
+        error:        t.error ?? undefined,
+        parentTaskId: t.parentTaskId ?? undefined,
+        parentData:   (t.parentData as Record<string, unknown>) ?? undefined,
+      })),
+      (stats) => {
+        const s = stats as RunStats
+        this.lastStats.set(parserName, s)
+        this.emit('stats', parserName, s)
+      },
+      onComplete,
+      (filePath) => this.emit('postprocess', parserName, filePath),
+    )
+    this._wireTaskEvents(ref.orchestrator)
+    await this.runPersistence.markRunRunning(runId).catch(console.error)
+    this.activeRuns.set(parserName, ref.orchestrator)
+  }
+
   findParserByRunId(runId: string): string | undefined {
     for (const [parserName, orch] of this.activeRuns) {
       if (orch.runId === runId) return parserName

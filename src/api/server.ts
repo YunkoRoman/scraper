@@ -491,6 +491,24 @@ app.post('/api/jobs/:runId/resume', async (req, res) => {
   }
 })
 
+// POST /api/jobs/:runId/retry-failed
+app.post('/api/jobs/:runId/retry-failed', async (req, res) => {
+  const { runId } = req.params
+  try {
+    const run = await runPersistence.getRunById(runId)
+    if (!run) { res.status(404).json({ error: 'Run not found' }); return }
+    if (runner.isRunning(run.parserName)) {
+      res.status(409).json({ error: 'Parser already running' }); return
+    }
+    runner.retryFailed(runId).catch((err: Error) => {
+      broadcast(run.parserName, { type: 'error', message: err.message })
+    })
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message })
+  }
+})
+
 const PORT = process.env.PORT ?? 3001
 app.listen(PORT, () => {
   console.log(`API server →  http://localhost:${PORT}`)
