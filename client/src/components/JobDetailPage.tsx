@@ -31,7 +31,7 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
   const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null)
   const [taskResult, setTaskResult] = useState<Record<string, unknown>[] | null>(null)
   const [taskResultLoading, setTaskResultLoading] = useState(false)
-  const LIMIT = 100
+  const LIMIT = 50
 
   const loadTasks = useCallback(async (p: number, filter: string) => {
     setLoading(true)
