@@ -12,7 +12,7 @@ import { CsvPostProcessor } from '../../infrastructure/csv/CsvPostProcessor.js'
 import type { WorkerOutMessage } from '../../infrastructure/worker/messages.js'
 import type { StepName } from '../../domain/value-objects/StepName.js'
 import { mkdir } from 'node:fs/promises'
-import { PageState } from '../../domain/value-objects/PageState.js'
+import { PageState, isTerminal } from '../../domain/value-objects/PageState.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -36,9 +36,10 @@ export class ParserOrchestrator extends EventEmitter {
     private readonly config: ParserConfig,
     outputBaseDir: string,
     snapshotTasks?: PageTask[],
+    runId?: string,
   ) {
     super()
-    this.run = new ParserRun(config.name)
+    this.run = new ParserRun(config.name, runId)
     if (snapshotTasks) {
       for (const t of snapshotTasks) this.run.restoreTask(t)
     }
@@ -73,6 +74,9 @@ export class ParserOrchestrator extends EventEmitter {
       task.state !== PageState.Retry
     ) {
       throw new Error(`Task "${taskId}" cannot be aborted (state: ${task.state})`)
+    }
+    if (task.state === PageState.InProgress) {
+      this.globalActive--
     }
     this.run.markAborted(taskId)
   }
@@ -218,6 +222,12 @@ export class ParserOrchestrator extends EventEmitter {
       }
       case 'PAGE_SUCCESS': {
         this.globalActive--
+        const task = this.run.getTask(msg.taskId)
+        if (!task || isTerminal(task.state)) {
+          this.flushDispatchQueue()
+          this.checkCompletion()
+          break
+        }
         this.run.markSuccess(msg.taskId)
         this.emit('task_done', this.run.getTask(msg.taskId)!)
         this.emit('stats', this.run.getStats())
@@ -233,7 +243,11 @@ export class ParserOrchestrator extends EventEmitter {
       }
       case 'PAGE_FAILED': {
         this.globalActive--
-        const task = this.run.getTask(msg.taskId)!
+        const task = this.run.getTask(msg.taskId)
+        if (!task || isTerminal(task.state)) {
+          this.flushDispatchQueue()
+          break
+        }
         if (task.attempts < task.maxAttempts) {
           this.run.markRetry(msg.taskId, msg.error)
           this.emit('stats', this.run.getStats())

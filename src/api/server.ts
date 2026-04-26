@@ -368,9 +368,9 @@ app.get('/api/jobs', async (req, res) => {
 
 // GET /api/jobs/:runId/tasks/:taskId/result — extracted rows for a task
 app.get('/api/jobs/:runId/tasks/:taskId/result', async (req, res) => {
-  const { taskId } = req.params
+  const { runId, taskId } = req.params
   try {
-    const rows = await runPersistence.getTaskResult(taskId)
+    const rows = await runPersistence.getTaskResult(runId, taskId)
     res.json({ rows: rows ?? [] })
   } catch (err) {
     res.status(500).json({ error: (err as Error).message })
@@ -413,7 +413,7 @@ app.get('/api/jobs/:runId/tasks/:taskId', async (req, res) => {
       const task = orchestrator?.getAllTasks().find((t) => t.id === taskId)
       if (task) { res.json(task); return }
     }
-    const task = await runPersistence.getTask(taskId)
+    const task = await runPersistence.getTask(runId, taskId)
     if (!task) { res.status(404).json({ error: 'Task not found' }); return }
     res.json(task)
   } catch (err) {
@@ -450,8 +450,7 @@ app.get('/api/jobs/:runId/tasks', async (req, res) => {
 app.get('/api/jobs/:runId', async (req, res) => {
   const { runId } = req.params
   try {
-    const { runs } = await runPersistence.getAllRuns(1, 1_000)
-    const run = runs.find((r) => r.id === runId)
+    const run = await runPersistence.getRunById(runId)
     if (!run) { res.status(404).json({ error: 'Run not found' }); return }
     const isRunning = runner.isRunning(run.parserName) &&
       runner.getOrchestrator(run.parserName)?.runId === runId
@@ -478,8 +477,7 @@ app.post('/api/jobs/:runId/stop', async (req, res) => {
 app.post('/api/jobs/:runId/resume', async (req, res) => {
   const { runId } = req.params
   try {
-    const { runs } = await runPersistence.getAllRuns(1, 1_000)
-    const run = runs.find((r) => r.id === runId)
+    const run = await runPersistence.getRunById(runId)
     if (!run) { res.status(404).json({ error: 'Run not found' }); return }
     if (runner.isRunning(run.parserName)) {
       res.status(409).json({ error: 'Parser already running' }); return

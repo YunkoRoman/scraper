@@ -20,26 +20,27 @@ export class ParserRunnerService extends EventEmitter {
     if (this.activeRuns.has(parserName)) {
       throw new Error(`Parser "${parserName}" is already running`)
     }
-    let orchestrator!: ParserOrchestrator
-    orchestrator = await this.runParser.execute(
+    const ref = { orchestrator: null as ParserOrchestrator | null }
+    const onComplete = async (stats: unknown) => {
+      const s = stats as RunStats
+      this.lastStats.set(parserName, s)
+      await this.runPersistence.markRunCompleted(ref.orchestrator!.runId, ref.orchestrator!.getAllTasks()).catch(console.error)
+      this.emit('complete', parserName, s)
+      this.activeRuns.delete(parserName)
+    }
+    ref.orchestrator = await this.runParser.execute(
       parserName,
       (stats) => {
         const s = stats as RunStats
         this.lastStats.set(parserName, s)
         this.emit('stats', parserName, s)
       },
-      async (stats) => {
-        const s = stats as RunStats
-        this.lastStats.set(parserName, s)
-        await this.runPersistence.markRunCompleted(orchestrator.runId, orchestrator.getAllTasks()).catch(console.error)
-        this.emit('complete', parserName, s)
-        this.activeRuns.delete(parserName)
-      },
+      onComplete,
       (filePath) => this.emit('postprocess', parserName, filePath),
     )
-    this._wireTaskEvents(orchestrator)
-    await this.runPersistence.createRun(parserName, orchestrator.runId).catch(console.error)
-    this.activeRuns.set(parserName, orchestrator)
+    this._wireTaskEvents(ref.orchestrator)
+    await this.runPersistence.createRun(parserName, ref.orchestrator.runId).catch(console.error)
+    this.activeRuns.set(parserName, ref.orchestrator)
   }
 
   async resume(parserName: string): Promise<void> {
@@ -49,9 +50,17 @@ export class ParserRunnerService extends EventEmitter {
     const snapshot = await this.runPersistence.loadLatestStoppedRunTasks(parserName)
     if (!snapshot) throw new Error(`No stopped run found for "${parserName}"`)
 
-    let orchestrator!: ParserOrchestrator
-    orchestrator = await this.runParser.resume(
+    const ref = { orchestrator: null as ParserOrchestrator | null }
+    const onComplete = async (stats: unknown) => {
+      const s = stats as RunStats
+      this.lastStats.set(parserName, s)
+      await this.runPersistence.markRunCompleted(ref.orchestrator!.runId, ref.orchestrator!.getAllTasks()).catch(console.error)
+      this.emit('complete', parserName, s)
+      this.activeRuns.delete(parserName)
+    }
+    ref.orchestrator = await this.runParser.resume(
       parserName,
+      snapshot.runId,
       snapshot.tasks.map((t) => ({
         id:           t.id,
         url:          t.url,
@@ -69,18 +78,12 @@ export class ParserRunnerService extends EventEmitter {
         this.lastStats.set(parserName, s)
         this.emit('stats', parserName, s)
       },
-      async (stats) => {
-        const s = stats as RunStats
-        this.lastStats.set(parserName, s)
-        await this.runPersistence.markRunCompleted(orchestrator.runId, orchestrator.getAllTasks()).catch(console.error)
-        this.emit('complete', parserName, s)
-        this.activeRuns.delete(parserName)
-      },
+      onComplete,
       (filePath) => this.emit('postprocess', parserName, filePath),
     )
-    this._wireTaskEvents(orchestrator)
-    await this.runPersistence.createRun(parserName, orchestrator.runId).catch(console.error)
-    this.activeRuns.set(parserName, orchestrator)
+    this._wireTaskEvents(ref.orchestrator)
+    await this.runPersistence.markRunRunning(snapshot.runId).catch(console.error)
+    this.activeRuns.set(parserName, ref.orchestrator)
   }
 
   async stop(parserName: string): Promise<void> {

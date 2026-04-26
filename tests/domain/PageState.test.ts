@@ -9,4 +9,8 @@ describe('PageState', () => {
     expect(isTerminal(PageState.Pending)).toBe(false)
     expect(isTerminal(PageState.Retry)).toBe(false)
   })
+
+  it('InProgress is not terminal', () => {
+    expect(isTerminal(PageState.InProgress)).toBe(false)
+  })
 })

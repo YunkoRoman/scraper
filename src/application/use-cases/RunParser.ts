@@ -23,13 +23,14 @@ export class RunParser {
 
   async resume(
     parserName: string,
+    runId: string,
     snapshotTasks: PageTask[],
     onStats: (stats: unknown) => void,
     onComplete: (stats: unknown) => void,
     onPostProcess: (filePath: string) => void,
   ): Promise<ParserOrchestrator> {
     const config = await this.loader.load(parserName)
-    const orchestrator = new ParserOrchestrator(config, this.outputDir, snapshotTasks)
+    const orchestrator = new ParserOrchestrator(config, this.outputDir, snapshotTasks, runId)
     this._wire(orchestrator, parserName, onStats, onComplete, onPostProcess)
     orchestrator.start().catch((err) => console.error(`[${parserName}] Resume error:`, err))
     return orchestrator

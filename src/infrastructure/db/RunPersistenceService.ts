@@ -1,6 +1,6 @@
 import { db } from './client.js'
 import { parserRuns, runTasks, taskResults } from './schema.js'
-import { eq, and, desc, sql } from 'drizzle-orm'
+import { eq, and, desc, sql, inArray } from 'drizzle-orm'
 import type { PageTask } from '../../domain/entities/PageTask.js'
 import type { RunStats } from '../../domain/entities/ParserRun.js'
 
@@ -27,9 +27,17 @@ export interface StoredTask {
   parentData?: Record<string, unknown> | null
 }
 
+const MAX_RESUME_TASKS = 10_000
+
 export class RunPersistenceService {
   async createRun(parserName: string, runId: string): Promise<void> {
     await db.insert(parserRuns).values({ id: runId, parserName, status: 'running' })
+  }
+
+  async markRunRunning(runId: string): Promise<void> {
+    await db.update(parserRuns)
+      .set({ status: 'running', stoppedAt: null })
+      .where(eq(parserRuns.id, runId))
   }
 
   async markRunStopped(runId: string, tasks: PageTask[]): Promise<void> {
@@ -76,14 +84,24 @@ export class RunPersistenceService {
       .onConflictDoUpdate({ target: taskResults.taskId, set: { rows: sql`excluded.rows` } })
   }
 
-  async getTaskResult(taskId: string): Promise<Record<string, unknown>[] | null> {
+  async getTaskResult(runId: string, taskId: string): Promise<Record<string, unknown>[] | null> {
+    const task = await this.getTask(runId, taskId)
+    if (!task) return null
     const [row] = await db.select().from(taskResults).where(eq(taskResults.taskId, taskId))
     return row ? (row.rows as Record<string, unknown>[]) : null
   }
 
-  async getTask(taskId: string): Promise<StoredTask | null> {
-    const [row] = await db.select().from(runTasks).where(eq(runTasks.id, taskId))
+  async getTask(runId: string, taskId: string): Promise<StoredTask | null> {
+    const [row] = await db.select().from(runTasks)
+      .where(and(eq(runTasks.id, taskId), eq(runTasks.runId, runId)))
     return row ? (row as StoredTask) : null
+  }
+
+  async getRunById(runId: string): Promise<RunInfo | null> {
+    const [row] = await db.select().from(parserRuns).where(eq(parserRuns.id, runId))
+    if (!row) return null
+    const stats = await this._computeStats(row.id)
+    return { ...row, stats }
   }
 
   async getLatestRunInfo(parserName: string): Promise<RunInfo | null> {
@@ -103,10 +121,30 @@ export class RunPersistenceService {
       .limit(limit)
       .offset(offset)
     const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(parserRuns)
-    const runs = await Promise.all(rows.map(async (r) => {
-      const stats = await this._computeStats(r.id)
+
+    if (rows.length === 0) return { runs: [], total: count }
+
+    const runIds = rows.map((r) => r.id)
+    const statsRows = await db.select({
+      runId:    runTasks.runId,
+      state:    runTasks.state,
+      stepType: runTasks.stepType,
+      count:    sql<number>`count(*)::int`,
+    }).from(runTasks)
+      .where(inArray(runTasks.runId, runIds))
+      .groupBy(runTasks.runId, runTasks.state, runTasks.stepType)
+
+    const statsByRun = new Map<string, typeof statsRows>()
+    for (const row of statsRows) {
+      if (!statsByRun.has(row.runId)) statsByRun.set(row.runId, [])
+      statsByRun.get(row.runId)!.push(row)
+    }
+
+    const runs = rows.map((r) => {
+      const runStatRows = statsByRun.get(r.id) ?? []
+      const stats = this._computeStatsFromRows(runStatRows)
       return { ...r, stats, failedCount: stats?.failed ?? 0 }
-    }))
+    })
     return { runs, total: count }
   }
 
@@ -134,7 +172,7 @@ export class RunPersistenceService {
   ): Promise<{ runId: string; tasks: StoredTask[] } | null> {
     const info = await this.getLatestRunInfo(parserName)
     if (!info || info.status !== 'stopped') return null
-    const { tasks } = await this.getRunTasks(info.id, 1, 100_000)
+    const { tasks } = await this.getRunTasks(info.id, 1, MAX_RESUME_TASKS)
     return { runId: info.id, tasks }
   }
 
@@ -147,20 +185,22 @@ export class RunPersistenceService {
 
   private async _computeStats(runId: string): Promise<RunStats | null> {
     const rows = await db.select({
+      runId:    runTasks.runId,
       state:    runTasks.state,
       stepType: runTasks.stepType,
       count:    sql<number>`count(*)::int`,
     }).from(runTasks)
       .where(eq(runTasks.runId, runId))
-      .groupBy(runTasks.state, runTasks.stepType)
+      .groupBy(runTasks.runId, runTasks.state, runTasks.stepType)
+    return this._computeStatsFromRows(rows)
+  }
 
+  private _computeStatsFromRows(rows: { state: string; stepType: string; count: number }[]): RunStats | null {
     if (rows.length === 0) return null
-
-    const total    = rows.reduce((s, r) => s + r.count, 0)
-    const get      = (state: string) => rows.filter(r => r.state === state).reduce((s, r) => s + r.count, 0)
-    const getType  = (type: string, state: string) => rows.find(r => r.stepType === type && r.state === state)?.count ?? 0
+    const total     = rows.reduce((s, r) => s + r.count, 0)
+    const get       = (state: string) => rows.filter(r => r.state === state).reduce((s, r) => s + r.count, 0)
+    const getType   = (type: string, state: string) => rows.find(r => r.stepType === type && r.state === state)?.count ?? 0
     const typeTotal = (type: string) => rows.filter(r => r.stepType === type).reduce((s, r) => s + r.count, 0)
-
     return {
       total,
       pending:    get('pending'),

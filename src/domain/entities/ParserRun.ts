@@ -25,11 +25,13 @@ export interface RunStats {
 }
 
 export class ParserRun {
-  readonly id = randomUUID()
+  readonly id: string
   private tasks = new Map<string, PageTask>()
   readonly startedAt = new Date()
 
-  constructor(readonly parserName: string) {}
+  constructor(readonly parserName: string, id?: string) {
+    this.id = id ?? randomUUID()
+  }
 
   addTask(
     url: string,
