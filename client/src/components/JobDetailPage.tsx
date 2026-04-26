@@ -11,7 +11,7 @@ const STATE_BADGE: Record<string, string> = {
   aborted:     'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
 }
 
-const FILTERS = ['all', 'pending', 'in_progress', 'success', 'failed', 'aborted']
+const FILTERS = ['all', 'pending', 'in_progress', 'retry', 'success', 'failed', 'aborted']
 
 interface Props {
   runId: string
@@ -27,6 +27,7 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null)
   const [taskResult, setTaskResult] = useState<Record<string, unknown>[] | null>(null)
   const [taskResultLoading, setTaskResultLoading] = useState(false)
@@ -70,14 +71,25 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
     loadTasks(1, f)
   }
 
+  function goTo(newPage: number) {
+    setPage(newPage)
+    loadTasks(newPage, statusFilter)
+  }
+
   async function handleStop() {
     setActionLoading(true)
-    try { await stopJob(runId); await loadRun() } catch { /* ignore */ } finally { setActionLoading(false) }
+    setActionError(null)
+    try { await stopJob(runId); await loadRun() } catch (e) {
+      setActionError((e as Error).message)
+    } finally { setActionLoading(false) }
   }
 
   async function handleResume() {
     setActionLoading(true)
-    try { await resumeJob(runId); await loadRun() } catch { /* ignore */ } finally { setActionLoading(false) }
+    setActionError(null)
+    try { await resumeJob(runId); await loadRun() } catch (e) {
+      setActionError((e as Error).message)
+    } finally { setActionLoading(false) }
   }
 
   async function handleRetry(task: TaskRow) {
@@ -125,22 +137,27 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
             </div>
           )}
 
-          <div className="ml-auto flex items-center gap-2">
-            {run?.isRunning ? (
-              <button onClick={handleStop} disabled={actionLoading}
-                className="text-xs px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold disabled:opacity-50 transition-colors">
-                {actionLoading ? 'Stopping…' : 'Stop Job'}
+          <div className="ml-auto flex flex-col items-end gap-1">
+            <div className="flex items-center gap-2">
+              {run?.isRunning ? (
+                <button onClick={handleStop} disabled={actionLoading}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold disabled:opacity-50 transition-colors">
+                  {actionLoading ? 'Stopping…' : 'Stop Job'}
+                </button>
+              ) : run?.status === 'stopped' ? (
+                <button onClick={handleResume} disabled={actionLoading}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white font-semibold disabled:opacity-50 transition-colors">
+                  {actionLoading ? 'Resuming…' : 'Resume Job'}
+                </button>
+              ) : null}
+              <button onClick={() => { loadRun(); loadTasks(page, statusFilter) }}
+                className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                Refresh
               </button>
-            ) : run?.status === 'stopped' ? (
-              <button onClick={handleResume} disabled={actionLoading}
-                className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white font-semibold disabled:opacity-50 transition-colors">
-                {actionLoading ? 'Resuming…' : 'Resume Job'}
-              </button>
-            ) : null}
-            <button onClick={() => { loadRun(); loadTasks(page, statusFilter) }}
-              className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-              Refresh
-            </button>
+            </div>
+            {actionError && (
+              <p className="text-xs text-red-500 mt-2">{actionError}</p>
+            )}
           </div>
         </div>
 
@@ -233,14 +250,16 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
           )}
 
           {total > LIMIT && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-700 text-sm text-gray-500">
-              <span>Page {page} of {Math.ceil(total / LIMIT)} ({total} total)</span>
-              <div className="flex gap-2">
-                <button onClick={() => { setPage((p) => p - 1); loadTasks(page - 1, statusFilter) }} disabled={page === 1}
+            <div className="flex items-center justify-center px-4 py-3 border-t border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-2">
+                <button onClick={() => goTo(page - 1)} disabled={page === 1}
                   className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-xs">
                   ← Prev
                 </button>
-                <button onClick={() => { setPage((p) => p + 1); loadTasks(page + 1, statusFilter) }} disabled={page >= Math.ceil(total / LIMIT)}
+                <span className="text-xs text-gray-500 px-2">
+                  {page} / {Math.ceil(total / LIMIT)}
+                </span>
+                <button onClick={() => goTo(page + 1)} disabled={page >= Math.ceil(total / LIMIT)}
                   className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-xs">
                   Next →
                 </button>

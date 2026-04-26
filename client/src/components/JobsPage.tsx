@@ -117,21 +117,51 @@ export function JobsPage({ onViewJob }: Props) {
       )}
 
       {/* Pagination */}
-      {total > LIMIT && (
-        <div className="flex items-center justify-between mt-4 text-sm text-gray-500">
-          <span>Page {page} of {Math.ceil(total / LIMIT)}</span>
-          <div className="flex gap-2">
-            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-              ← Prev
+      {total > LIMIT && (() => {
+        const totalPages = Math.ceil(total / LIMIT)
+
+        function goTo(p: number) {
+          setPage(p)
+          load(p)
+        }
+
+        function pageNumbers(): (number | '…')[] {
+          if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
+          const pages: (number | '…')[] = [1]
+          if (page > 3) pages.push('…')
+          for (let p = Math.max(2, page - 1); p <= Math.min(totalPages - 1, page + 1); p++) pages.push(p)
+          if (page < totalPages - 2) pages.push('…')
+          pages.push(totalPages)
+          return pages
+        }
+
+        return (
+          <div className="flex items-center justify-center gap-1 mt-4">
+            <button onClick={() => goTo(page - 1)} disabled={page === 1}
+              className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm text-gray-500">
+              ←
             </button>
-            <button onClick={() => setPage((p) => p + 1)} disabled={page >= Math.ceil(total / LIMIT)}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-              Next →
+            {pageNumbers().map((p, i) =>
+              p === '…' ? (
+                <span key={`ellipsis-${i}`} className="px-2 text-gray-400 text-sm">…</span>
+              ) : (
+                <button key={p} onClick={() => goTo(p as number)}
+                  className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                    p === page
+                      ? 'bg-emerald-600 text-white'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}>
+                  {p}
+                </button>
+              )
+            )}
+            <button onClick={() => goTo(page + 1)} disabled={page >= totalPages}
+              className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm text-gray-500">
+              →
             </button>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
