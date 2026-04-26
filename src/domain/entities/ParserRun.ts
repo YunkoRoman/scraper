@@ -56,7 +56,7 @@ export class ParserRun {
 
   markInProgress(id: string): void {
     const task = this.requireTask(id)
-    this.tasks.set(id, { ...task, state: PageState.InProgress })
+    this.tasks.set(id, { ...task, state: PageState.InProgress, attempts: task.attempts + 1 })
   }
 
   markPending(id: string): void {
@@ -66,7 +66,7 @@ export class ParserRun {
 
   markRetry(id: string, error: string): void {
     const task = this.requireTask(id)
-    this.tasks.set(id, { ...task, state: PageState.Retry, attempts: task.attempts + 1, error })
+    this.tasks.set(id, { ...task, state: PageState.Retry, error })
   }
 
   markSuccess(id: string): void {
