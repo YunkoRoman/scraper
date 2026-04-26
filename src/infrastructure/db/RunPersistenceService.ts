@@ -49,8 +49,9 @@ export class RunPersistenceService {
 
   async markRunCompleted(runId: string, tasks: PageTask[]): Promise<void> {
     await this._bulkUpsertTasks(runId, tasks)
+    const hasFailed = tasks.some((t) => t.state === PageState.Failed)
     await db.update(parserRuns)
-      .set({ status: 'completed', stoppedAt: new Date() })
+      .set({ status: hasFailed ? 'failed' : 'completed', stoppedAt: new Date() })
       .where(eq(parserRuns.id, runId))
   }
 
