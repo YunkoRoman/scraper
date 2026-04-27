@@ -88,8 +88,8 @@ export function DebugPage() {
   }, [logs])
 
   function handleRun() {
-    const parentData = parseJsonSafe(parentDataJson)
-    run(selectedParser, selectedStep, url, parentData)
+    const parent_data = parseJsonSafe(parentDataJson)
+    run(selectedParser, selectedStep, url, parent_data)
   }
 
   const parentDataError =

@@ -57,7 +57,7 @@ export const runTasks = pgTable('run_tasks', {
   maxAttempts:  integer('max_attempts').notNull(),
   error:        text('error'),
   parentTaskId: uuid('parent_task_id'),
-  parentData:   jsonb('parent_data'),
+  parent_data:  jsonb('parent_data'),
   updatedAt:    timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

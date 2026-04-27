@@ -39,7 +39,7 @@ export class ParserRunnerService extends EventEmitter {
       (filePath) => this.emit('postprocess', parserName, filePath),
     )
     this._wireTaskEvents(ref.orchestrator)
-    await this.runPersistence.createRun(parserName, ref.orchestrator.runId).catch(console.error)
+    await this.runPersistence.create({ parserName, runId: ref.orchestrator.runId }).catch(console.error)
     this.activeRuns.set(parserName, ref.orchestrator)
   }
 
@@ -71,7 +71,7 @@ export class ParserRunnerService extends EventEmitter {
         maxAttempts:  t.maxAttempts,
         error:        t.error ?? undefined,
         parentTaskId: t.parentTaskId ?? undefined,
-        parentData:   (t.parentData as Record<string, unknown>) ?? undefined,
+        parent_data:  (t.parent_data as Record<string, unknown>) ?? undefined,
       })),
       (stats) => {
         const s = stats as RunStats
@@ -109,7 +109,7 @@ export class ParserRunnerService extends EventEmitter {
   }
 
   async retryFailed(runId: string): Promise<void> {
-    const runInfo = await this.runPersistence.getRunById(runId)
+    const runInfo = await this.runPersistence.findById(runId)
     if (!runInfo) throw new Error(`Run "${runId}" not found`)
     const parserName = runInfo.parserName
     if (this.activeRuns.has(parserName)) {
@@ -140,7 +140,7 @@ export class ParserRunnerService extends EventEmitter {
         maxAttempts:  t.maxAttempts,
         error:        t.error ?? undefined,
         parentTaskId: t.parentTaskId ?? undefined,
-        parentData:   (t.parentData as Record<string, unknown>) ?? undefined,
+        parent_data:  (t.parent_data as Record<string, unknown>) ?? undefined,
       })),
       (stats) => {
         const s = stats as RunStats

@@ -1,6 +1,6 @@
-import { db } from './client.js'
 import { parserRuns, runTasks, taskResults } from './schema.js'
 import { eq, and, desc, sql, inArray } from 'drizzle-orm'
+import { BasePersistenceService } from './BasePersistenceService.js'
 import type { PageTask } from '../../domain/entities/PageTask.js'
 import type { RunStats } from '../../domain/entities/ParserRun.js'
 
@@ -24,27 +24,58 @@ export interface StoredTask {
   maxAttempts: number
   error?: string | null
   parentTaskId?: string | null
-  parentData?: Record<string, unknown> | null
+  parent_data?: Record<string, unknown> | null
+}
+
+export interface CreateRunInput {
+  parserName: string
+  runId: string
+}
+
+export interface UpdateRunStatusInput {
+  status: 'running' | 'stopped' | 'completed' | 'failed'
+  stoppedAt?: Date | null
 }
 
 const MAX_RESUME_TASKS = 10_000
 
-export class RunPersistenceService {
-  async createRun(parserName: string, runId: string): Promise<void> {
-    await db.insert(parserRuns).values({ id: runId, parserName, status: 'running' })
+export class RunPersistenceService extends BasePersistenceService<RunInfo, CreateRunInput, UpdateRunStatusInput> {
+
+  // ── Abstract implementations ─────────────────────────────────────────────
+
+  async create(input: CreateRunInput): Promise<RunInfo> {
+    await this.db.insert(parserRuns).values({ id: input.runId, parserName: input.parserName, status: 'running' })
+    return { id: input.runId, parserName: input.parserName, status: 'running', startedAt: new Date(), stats: null }
   }
 
+  async findById(id: string): Promise<RunInfo | null> {
+    const [row] = await this.db.select().from(parserRuns).where(eq(parserRuns.id, id))
+    if (!row) return null
+    const stats = await this._computeStats(row.id)
+    return { ...row, stats }
+  }
+
+  async update(id: string, input: UpdateRunStatusInput): Promise<RunInfo> {
+    await this.db.update(parserRuns)
+      .set({ status: input.status, ...(input.stoppedAt !== undefined && { stoppedAt: input.stoppedAt }) })
+      .where(eq(parserRuns.id, id))
+    const [row] = await this.db.select().from(parserRuns).where(eq(parserRuns.id, id))
+    return { ...row, stats: null }
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.db.delete(parserRuns).where(eq(parserRuns.id, id))
+  }
+
+  // ── Run lifecycle ─────────────────────────────────────────────────────────
+
   async markRunRunning(runId: string): Promise<void> {
-    await db.update(parserRuns)
-      .set({ status: 'running', stoppedAt: null })
-      .where(eq(parserRuns.id, runId))
+    await this.update(runId, { status: 'running', stoppedAt: null })
   }
 
   async markRunStopped(runId: string, tasks: PageTask[]): Promise<void> {
     await this._bulkUpsertTasks(runId, tasks)
-    await db.update(parserRuns)
-      .set({ status: 'stopped', stoppedAt: new Date() })
-      .where(eq(parserRuns.id, runId))
+    await this.update(runId, { status: 'stopped', stoppedAt: new Date() })
   }
 
   async markRunCompleted(runId: string, tasks: PageTask[]): Promise<void> {
@@ -52,13 +83,13 @@ export class RunPersistenceService {
     const hasFailed = tasks.some((t) => t.state === 'failed')
     const finalStatus = hasFailed ? 'failed' : 'completed'
     console.log(`[RunPersistenceService] markRunCompleted runId=${runId} tasks=${tasks.length} hasFailed=${hasFailed} → ${finalStatus}`)
-    await db.update(parserRuns)
-      .set({ status: finalStatus, stoppedAt: new Date() })
-      .where(eq(parserRuns.id, runId))
+    await this.update(runId, { status: finalStatus, stoppedAt: new Date() })
   }
 
+  // ── Task persistence ──────────────────────────────────────────────────────
+
   async upsertTask(runId: string, task: PageTask): Promise<void> {
-    await db.insert(runTasks).values({
+    await this.db.insert(runTasks).values({
       id:           task.id,
       runId,
       url:          task.url,
@@ -69,7 +100,7 @@ export class RunPersistenceService {
       maxAttempts:  task.maxAttempts,
       error:        task.error ?? null,
       parentTaskId: task.parentTaskId ?? null,
-      parentData:   task.parentData ?? null,
+      parent_data:  task.parent_data ?? null,
       updatedAt:    new Date(),
     }).onConflictDoUpdate({
       target: runTasks.id,
@@ -83,32 +114,27 @@ export class RunPersistenceService {
   }
 
   async saveTaskResult(taskId: string, rows: Record<string, unknown>[]): Promise<void> {
-    await db.insert(taskResults).values({ taskId, rows })
+    await this.db.insert(taskResults).values({ taskId, rows })
       .onConflictDoUpdate({ target: taskResults.taskId, set: { rows: sql`excluded.rows` } })
   }
 
   async getTaskResult(runId: string, taskId: string): Promise<Record<string, unknown>[] | null> {
     const task = await this.getTask(runId, taskId)
     if (!task) return null
-    const [row] = await db.select().from(taskResults).where(eq(taskResults.taskId, taskId))
+    const [row] = await this.db.select().from(taskResults).where(eq(taskResults.taskId, taskId))
     return row ? (row.rows as Record<string, unknown>[]) : null
   }
 
   async getTask(runId: string, taskId: string): Promise<StoredTask | null> {
-    const [row] = await db.select().from(runTasks)
+    const [row] = await this.db.select().from(runTasks)
       .where(and(eq(runTasks.id, taskId), eq(runTasks.runId, runId)))
     return row ? (row as StoredTask) : null
   }
 
-  async getRunById(runId: string): Promise<RunInfo | null> {
-    const [row] = await db.select().from(parserRuns).where(eq(parserRuns.id, runId))
-    if (!row) return null
-    const stats = await this._computeStats(row.id)
-    return { ...row, stats }
-  }
+  // ── Run queries ───────────────────────────────────────────────────────────
 
   async getLatestRunInfo(parserName: string): Promise<RunInfo | null> {
-    const [row] = await db.select().from(parserRuns)
+    const [row] = await this.db.select().from(parserRuns)
       .where(eq(parserRuns.parserName, parserName))
       .orderBy(desc(parserRuns.startedAt))
       .limit(1)
@@ -119,16 +145,16 @@ export class RunPersistenceService {
 
   async getAllRuns(page: number, limit: number): Promise<{ runs: (RunInfo & { failedCount: number })[]; total: number }> {
     const offset = (page - 1) * limit
-    const rows = await db.select().from(parserRuns)
+    const rows = await this.db.select().from(parserRuns)
       .orderBy(desc(parserRuns.startedAt))
       .limit(limit)
       .offset(offset)
-    const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(parserRuns)
+    const [{ count }] = await this.db.select({ count: sql<number>`count(*)::int` }).from(parserRuns)
 
     if (rows.length === 0) return { runs: [], total: count }
 
     const runIds = rows.map((r) => r.id)
-    const statsRows = await db.select({
+    const statsRows = await this.db.select({
       runId:    runTasks.runId,
       state:    runTasks.state,
       stepType: runTasks.stepType,
@@ -161,11 +187,11 @@ export class RunPersistenceService {
     const conditions = status
       ? and(eq(runTasks.runId, runId), eq(runTasks.state, status))
       : eq(runTasks.runId, runId)
-    const rows = await db.select().from(runTasks)
+    const rows = await this.db.select().from(runTasks)
       .where(conditions)
       .limit(limit)
       .offset(offset)
-    const [{ count }] = await db.select({ count: sql<number>`count(*)::int` })
+    const [{ count }] = await this.db.select({ count: sql<number>`count(*)::int` })
       .from(runTasks).where(conditions)
     return { tasks: rows as StoredTask[], total: count }
   }
@@ -180,20 +206,20 @@ export class RunPersistenceService {
   }
 
   async resetFailedTasks(runId: string): Promise<void> {
-    await db.update(runTasks)
+    await this.db.update(runTasks)
       .set({ state: 'pending', error: null, attempts: 0, updatedAt: new Date() })
       .where(and(eq(runTasks.runId, runId), eq(runTasks.state, 'failed')))
   }
 
+  // ── Private helpers ───────────────────────────────────────────────────────
+
   private async _bulkUpsertTasks(runId: string, tasks: PageTask[]): Promise<void> {
     if (tasks.length === 0) return
-    for (const task of tasks) {
-      await this.upsertTask(runId, task)
-    }
+    for (const task of tasks) await this.upsertTask(runId, task)
   }
 
   private async _computeStats(runId: string): Promise<RunStats | null> {
-    const rows = await db.select({
+    const rows = await this.db.select({
       runId:    runTasks.runId,
       state:    runTasks.state,
       stepType: runTasks.stepType,

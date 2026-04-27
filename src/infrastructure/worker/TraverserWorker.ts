@@ -28,6 +28,7 @@ const queue: PageTask[] = []
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function processPage(task: PageTask, step: Traverser<any>): Promise<void> {
   const page = await adapter.newPage()
+  page.on('console', (msg: { type: () => any; text: () => any; }) => console.log(`[browser:${msg.type()}]`, msg.text()))
   try {
     await page.goto(task.url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     const items = await step.run(page, task)

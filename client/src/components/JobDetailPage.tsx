@@ -324,11 +324,11 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
                   </pre>
                 </div>
               )}
-              {selectedTask.parentData && Object.keys(selectedTask.parentData).length > 0 && (
+              {selectedTask.parent_data && Object.keys(selectedTask.parent_data).length > 0 && (
                 <div>
                   <p className="text-xs text-gray-500 font-medium mb-1">Parent Data</p>
                   <pre className="text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded p-2 whitespace-pre-wrap break-all max-h-32 overflow-y-auto">
-                    {JSON.stringify(selectedTask.parentData, null, 2)}
+                    {JSON.stringify(selectedTask.parent_data, null, 2)}
                   </pre>
                 </div>
               )}

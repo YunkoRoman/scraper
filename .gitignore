@@ -30,4 +30,4 @@ pnpm-debug.log*
 *.sw?
 
 # Tooling
-.claude/
+# .claude/

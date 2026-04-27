@@ -29,7 +29,7 @@ export class DebugStepRunner extends EventEmitter {
     parserName: string,
     stepName: string,
     url: string,
-    parentData?: Record<string, unknown>,
+    parent_data?: Record<string, unknown>,
   ): Promise<void> {
     const config = await this.loader.load(parserName)
     const step = config.steps.get(stepName as StepName)
@@ -39,7 +39,7 @@ export class DebugStepRunner extends EventEmitter {
       throw new Error(`Step "${stepName}" has no filePath or code — cannot spawn worker`)
     }
 
-    const task = createPageTask(url, stepName as StepName, step.type, config.retryConfig, undefined, parentData)
+    const task = createPageTask(url, stepName as StepName, step.type, config.retryConfig, undefined, parent_data)
 
     const bootstrapFile = resolve(__dirname, '../../infrastructure/worker/worker-bootstrap.js')
     const tsFile = step.type === 'traverser'

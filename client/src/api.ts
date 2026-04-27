@@ -229,7 +229,7 @@ export interface TaskRow {
   maxAttempts: number
   error?: string | null
   parentTaskId?: string | null
-  parentData?: Record<string, unknown> | null
+  parent_data?: Record<string, unknown> | null
 }
 
 export async function listJobs(page = 1, limit = 50): Promise<{ runs: RunInfo[]; total: number }> {

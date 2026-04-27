@@ -39,9 +39,9 @@ export class ParserRun {
     stepType: StepType,
     retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG,
     parentTaskId?: string,
-    parentData?: Record<string, unknown>,
+    parent_data?: Record<string, unknown>,
   ): PageTask {
-    const task = createPageTask(url, step, stepType, retryConfig, parentTaskId, parentData)
+    const task = createPageTask(url, step, stepType, retryConfig, parentTaskId, parent_data)
     this.tasks.set(task.id, task)
     return task
   }

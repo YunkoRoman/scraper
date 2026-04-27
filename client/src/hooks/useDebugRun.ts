@@ -34,7 +34,7 @@ export function useDebugRun() {
     parserName: string,
     stepName: string,
     url: string,
-    parentData?: Record<string, unknown>,
+    parent_data?: Record<string, unknown>,
   ) {
     abortRef.current?.abort()
     const controller = new AbortController()
@@ -46,7 +46,7 @@ export function useDebugRun() {
       const res = await fetch(`/api/parsers/${parserName}/steps/${stepName}/debug`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, parentData }),
+        body: JSON.stringify({ url, parent_data }),
         signal: controller.signal,
       })
 

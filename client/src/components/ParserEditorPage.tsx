@@ -8,12 +8,12 @@ import { createParser, type CreateParserInput } from '../api'
 import { useTheme } from '../hooks/useTheme'
 
 const TRAVERSER_TEMPLATE = `// page: Playwright/Puppeteer Page
-// task: { url: string, parentData?: Record<string, unknown> }
+// task: { url: string, parent_data?: Record<string, unknown> }
 const items = await page.$$eval('a', els => els.map(el => el.href))
 return items.map(link => ({ link, page_type: 'nextStep', parent_data: {} }))`
 
 const EXTRACTOR_TEMPLATE = `// page: Playwright/Puppeteer Page
-// task: { url: string, parentData?: Record<string, unknown> }
+// task: { url: string, parent_data?: Record<string, unknown> }
 const title = await page.$eval('h1', el => el.textContent?.trim() ?? '').catch(() => '')
 return [{ title, __url: task.url }]`
 

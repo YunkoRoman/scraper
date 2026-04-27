@@ -159,11 +159,11 @@ export function TaskDetailPage({ runId, taskId, onBack }: Props) {
               </div>
             )}
 
-            {task.parentData && Object.keys(task.parentData).length > 0 && (
+            {task.parent_data && Object.keys(task.parent_data).length > 0 && (
               <div>
                 <p className="text-xs text-gray-500 font-medium mb-1 uppercase tracking-wider">Parent Data</p>
                 <pre className="text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded p-3 whitespace-pre-wrap break-all max-h-48 overflow-y-auto">
-                  {JSON.stringify(task.parentData, null, 2)}
+                  {JSON.stringify(task.parent_data, null, 2)}
                 </pre>
               </div>
             )}
