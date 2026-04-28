@@ -1,6 +1,6 @@
 // client/src/hooks/useDebugRun.ts
 import { useEffect, useRef, useState } from 'react'
-import type { TraverserResult } from '../api'
+import { API_BASE, type TraverserResult } from '../api'
 
 export interface LogLine {
   level: 'log' | 'error'
@@ -43,7 +43,7 @@ export function useDebugRun() {
     setState({ status: 'running', logs: [], result: null, error: null })
 
     try {
-      const res = await fetch(`/api/parsers/${parserName}/steps/${stepName}/debug`, {
+      const res = await fetch(`${API_BASE}/api/parsers/${parserName}/steps/${stepName}/debug`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, parent_data }),

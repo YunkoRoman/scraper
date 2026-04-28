@@ -1,6 +1,6 @@
 // client/src/hooks/useParserSSE.ts
 import { useEffect, useState } from 'react'
-import type { RunStats } from '../api'
+import { API_BASE, type RunStats } from '../api'
 
 export type ParserStatus = 'idle' | 'running' | 'stopped' | 'complete' | 'error'
 
@@ -20,7 +20,7 @@ export function useParserSSE(parserName: string): ParserState {
   })
 
   useEffect(() => {
-    const es = new EventSource(`/api/parsers/${parserName}/events`)
+    const es = new EventSource(`${API_BASE}/api/parsers/${parserName}/events`)
 
     es.onmessage = (e: MessageEvent) => {
       const msg = JSON.parse(e.data) as {
@@ -61,7 +61,9 @@ export function useParserSSE(parserName: string): ParserState {
       }
     }
 
-    es.onerror = () => {}
+    es.onerror = (err) => {
+      console.error(`SSE connection error for ${parserName}:`, err)
+    }
     return () => es.close()
   }, [parserName])
 

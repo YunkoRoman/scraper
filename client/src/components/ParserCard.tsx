@@ -1,8 +1,6 @@
-// client/src/components/ParserCard.tsx
 import { useState, useEffect } from 'react'
-import { useParserSSE } from '../hooks/useParserSSE'
 import { StatsPanel } from './StatsPanel'
-import { startParser, stopParser, resumeParser, listFiles, downloadFile } from '../api'
+import { startParser, stopParser, resumeParser, listFiles, downloadFile, getStatus, type RunStats } from '../api'
 import type { OutputFile } from '../api'
 
 interface Props {
@@ -28,29 +26,67 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 export function ParserCard({ name, onEdit, onViewJob }: Props) {
-  const { status, stats, errorMessage } = useParserSSE(name)
+  const [status, setStatus] = useState<'idle'|'running'|'stopped'|'complete'|'error'>('idle')
+  const [stats, setStats] = useState<RunStats | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [files, setFiles] = useState<OutputFile[]>([])
 
-  useEffect(() => {
-    if (status === 'complete' || status === 'idle' || status === 'stopped') {
-      listFiles(name).then(setFiles).catch(() => setFiles([]))
+  const refreshStatus = async () => {
+    try {
+      const data = await getStatus(name)
+      setStatus(data.running ? 'running' : (data.stats ? 'complete' : 'idle'))
+      setStats(data.stats)
+    } catch (err) {
+      console.error('Failed to get status:', err)
     }
-  }, [status, name])
+  }
+
+  useEffect(() => {
+    refreshStatus()
+    listFiles(name).then(setFiles).catch(() => setFiles([]))
+  }, [name])
 
   async function handleRun() {
     setLoading(true)
-    try { await startParser(name) } catch (err) { console.error(err) } finally { setLoading(false) }
+    setErrorMessage(null)
+    try { 
+      await startParser(name)
+      setStatus('running')
+    } catch (err) { 
+      console.error(err) 
+      setErrorMessage((err as Error).message)
+    } finally { 
+      setLoading(false) 
+    }
   }
 
   async function handleStop() {
     setLoading(true)
-    try { await stopParser(name) } catch (err) { console.error(err) } finally { setLoading(false) }
+    setErrorMessage(null)
+    try { 
+      await stopParser(name)
+      setStatus('stopped')
+    } catch (err) { 
+      console.error(err) 
+      setErrorMessage((err as Error).message)
+    } finally { 
+      setLoading(false) 
+    }
   }
 
   async function handleResume() {
     setLoading(true)
-    try { await resumeParser(name) } catch (err) { console.error(err) } finally { setLoading(false) }
+    setErrorMessage(null)
+    try { 
+      await resumeParser(name)
+      setStatus('running')
+    } catch (err) { 
+      console.error(err) 
+      setErrorMessage((err as Error).message)
+    } finally { 
+      setLoading(false) 
+    }
   }
 
   const isRunning = status === 'running'
