@@ -35,7 +35,13 @@ export function ParserCard({ name, onEdit, onViewJob }: Props) {
   const refreshStatus = async () => {
     try {
       const data = await getStatus(name)
-      setStatus(data.running ? 'running' : (data.stats ? 'complete' : 'idle'))
+      const newStatus = data.running ? 'running' : (data.stats ? 'complete' : 'idle')
+      
+      if (status === 'running' && newStatus !== 'running') {
+        listFiles(name).then(setFiles).catch(() => {})
+      }
+      
+      setStatus(newStatus)
       setStats(data.stats)
     } catch (err) {
       console.error('Failed to get status:', err)
@@ -45,6 +51,12 @@ export function ParserCard({ name, onEdit, onViewJob }: Props) {
   useEffect(() => {
     refreshStatus()
     listFiles(name).then(setFiles).catch(() => setFiles([]))
+
+    const interval = setInterval(() => {
+      refreshStatus()
+    }, 2000)
+
+    return () => clearInterval(interval)
   }, [name])
 
   async function handleRun() {
