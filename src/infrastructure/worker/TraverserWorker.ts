@@ -28,7 +28,19 @@ const queue: PageTask[] = []
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function processPage(task: PageTask, step: Traverser<any>): Promise<void> {
   const page = await adapter.newPage()
-  page.on('console', (msg: { type: () => any; text: () => any; }) => console.log(`[browser:${msg.type()}]`, msg.text()))
+
+  // Direct tunnel to Node.js console
+  await page.exposeFunction('logToNode', (msg: string) => {
+    console.log('[browser:debug]', msg)
+  })
+
+  await page.addInitScript(() => {
+    (window as any).debugLog = (data: any) => {
+      const serialized = typeof data === 'object' ? JSON.stringify(data, (k, v) => (typeof v === 'function' ? '[Function]' : v), 2) : String(data)
+      ;(window as any).logToNode(serialized)
+    }
+  })
+
   try {
     await page.goto(task.url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     const items = await step.run(page, task)
