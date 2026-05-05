@@ -36,13 +36,34 @@ async function processPage(
   step: Extractor<any>,
 ): Promise<void> {
   const page = await adapter.newPage();
-  page.on("console", (msg: { type: () => any; text: () => any; }) =>
-    console.log(`[browser:${msg.type()}]`, msg.text()),
-  );
+
+  await page.exposeFunction('logToNode', (...args: any[]) => {
+      console.log('[browser:debug]', ...args);
+  });
+
+  await page.addInitScript(() => {
+      const originalLog = console.log;
+      console.log = (...args) => {
+          (window as any).logToNode(...args.map(a => 
+              (typeof a === 'object' && a !== null) ? JSON.stringify(a, (k, v) => {
+                  if (typeof v === 'function') return '[Function]';
+                  return v;
+              }, 2) : String(a)
+          ));
+          originalLog.apply(console, args);
+      };
+  });
 
   try {
     await page.goto(task.url, {waitUntil: "domcontentloaded", timeout: 30_000});
     const rows = await step.run(page, task);
+
+    // Forced debug dump
+    const debugData = await page.evaluate(() => (window as any).DEBUG_DATA || "NO_DEBUG_DATA_FOUND");
+    console.log("--- DEBUG DATA START ---");
+    console.log(debugData);
+    console.log("--- DEBUG DATA END ---");
+
     parentPort!.postMessage({
       type: "DATA_EXTRACTED",
       taskId: task.id,
