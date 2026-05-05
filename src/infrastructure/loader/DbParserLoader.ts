@@ -8,6 +8,8 @@ import { db } from '../db/client.js'
 import { parsers, steps as stepsTable } from '../db/schema.js'
 import { eq } from 'drizzle-orm'
 import type { StepSettings } from '../../domain/value-objects/StepSettings.js'
+import type { PageTask } from '../../domain/entities/PageTask.js'
+import type { TraverserResult } from '../../domain/value-objects/TraverserResult.js'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (...args: string[]) => (...a: any[]) => Promise<any>
@@ -34,11 +36,16 @@ export class DbParserLoader implements IParserLoader {
         throw new Error(`Syntax error in step "${s.name}" of parser "${row.name}": ${(err as Error).message}`)
       }
       if (s.type === 'traverser') {
-        const t = new Traverser(sn, run, settings)
+        const t = new Traverser(sn, run as (page: unknown, task: PageTask) => Promise<TraverserResult[]>, settings)
         t.code = s.code
         stepMap.set(sn, t)
       } else {
-        const e = new Extractor(sn, run, s.outputFile ?? `${s.name}.csv`, settings)
+        const e = new Extractor(
+          sn,
+          run as (page: unknown, task: PageTask) => Promise<Record<string, unknown>[]>,
+          s.outputFile ?? `${s.name}.csv`,
+          settings,
+        )
         e.code = s.code
         stepMap.set(sn, e)
       }

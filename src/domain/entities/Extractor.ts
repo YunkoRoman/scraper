@@ -5,7 +5,6 @@ import type { PageTask } from './PageTask.js'
 
 export class Extractor<P = import('playwright').Page> extends Step<P> {
   readonly type = 'extractor' as const
-  code?: string
 
   constructor(
     name: StepName,

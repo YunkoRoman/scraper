@@ -6,7 +6,6 @@ import type { PageTask } from './PageTask.js'
 
 export class Traverser<P = import('playwright').Page> extends Step<P> {
   readonly type = 'traverser' as const
-  code?: string
 
   constructor(
     name: StepName,
