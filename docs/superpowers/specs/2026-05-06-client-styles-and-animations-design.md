@@ -124,9 +124,10 @@ All primitives expose `className` + minimal animation knobs. No deep customizati
 
 ### 4.3 `<MotionCard>`
 ```tsx
-<MotionCard className="...">{children}</MotionCard>
+<MotionCard className="..." inheritVariants={false}>{children}</MotionCard>
 ```
 - Replaces `<div>` for cards. Hover: `y:-2`, shadow-card → shadow-cardHover. Tap: `scale:0.98`. Mount: fade-up.
+- `inheritVariants={true}` skips own mount animation and lets a parent `<StaggerList>` drive entry.
 - Reduced-motion: shadow change only.
 
 ### 4.4 `<SpringButton>`
@@ -180,12 +181,12 @@ Thin re-export of framer-motion's hook so primitives can branch without each imp
 - "+ New Parser": `<SpringButton variant="primary">` violet.
 
 ### 5.3 `ParserCard.tsx`
-- Wrapper: `<MotionCard>`.
+- Wrapper: `<MotionCard>`. When rendered inside the grid's `<StaggerList>`, its mount animation is suppressed and the parent's stagger drives the entry — `<MotionCard>` accepts an `inheritVariants` prop (default `false`) for this case.
 - Status dot: `<StatusDot>`.
 - Status badge: `<StatusBadge>`.
 - Run/Stop/Resume: `<SpringButton>` with appropriate variant.
 - Output files: `<StaggerList>` so files slide in when run completes.
-- Stats numbers: animated count-up via `useMotionValue` + `animate`.
+- Stats numbers: animated count-up via `useMotionValue` + `animate`. Animation runs only on **value change ≥1** between renders (status polls every 2s; identical values must not retrigger).
 - Error message: slide+fade via `AnimatePresence`.
 
 ### 5.4 `JobsPage.tsx`
