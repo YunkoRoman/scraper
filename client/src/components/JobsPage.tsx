@@ -1,13 +1,14 @@
+// client/src/components/JobsPage.tsx
 import { useEffect, useState, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { listJobs } from '../api'
 import type { RunInfo } from '../api'
-
-const STATUS_BADGE: Record<string, string> = {
-  running:   'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300 animate-pulse',
-  stopped:   'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
-  completed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
-  failed:    'bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400',
-}
+import { JOB_STATUS, UNKNOWN_STATUS } from '../design/status'
+import { StatusBadge } from './motion/StatusBadge'
+import { SpringButton } from './motion/SpringButton'
+import { FadeIn } from './motion/FadeIn'
+import { staggerItemVariants } from './motion/StaggerList'
+import { useReducedMotion } from '../hooks/useReducedMotion'
 
 interface Props {
   onViewJob: (runId: string) => void
@@ -18,6 +19,8 @@ export function JobsPage({ onViewJob }: Props) {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [refreshSpin, setRefreshSpin] = useState(false)
+  const reduced = useReducedMotion()
   const LIMIT = 50
 
   const load = useCallback(async (p: number) => {
@@ -33,13 +36,17 @@ export function JobsPage({ onViewJob }: Props) {
 
   useEffect(() => { load(page) }, [load, page])
 
-  // Poll for running jobs
   useEffect(() => {
     const hasRunning = runs.some((r) => r.status === 'running')
     if (!hasRunning) return
     const id = setInterval(() => load(page), 3000)
     return () => clearInterval(id)
   }, [runs, load, page])
+
+  function handleRefresh() {
+    setRefreshSpin(true)
+    load(page).then(() => setRefreshSpin(false))
+  }
 
   function formatDate(iso: string) {
     return new Date(iso).toLocaleString()
@@ -55,15 +62,30 @@ export function JobsPage({ onViewJob }: Props) {
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6">
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Jobs <span className="text-sm font-normal text-gray-500 ml-1">({total})</span>
-        </h2>
-        <button onClick={() => load(page)}
-          className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-          Refresh
-        </button>
-      </div>
+      <FadeIn>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Jobs <span className="text-sm font-normal text-gray-500 ml-1">({total})</span>
+          </h2>
+          <SpringButton
+            variant="ghost"
+            onClick={handleRefresh}
+            className="text-xs px-3 py-1.5 flex items-center gap-1.5"
+          >
+            <motion.svg
+              animate={refreshSpin && !reduced ? { rotate: 360 } : { rotate: 0 }}
+              transition={{ duration: 0.5, ease: 'easeInOut' }}
+              onAnimationComplete={() => setRefreshSpin(false)}
+              className="w-3.5 h-3.5"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </motion.svg>
+            Refresh
+          </SpringButton>
+        </div>
+      </FadeIn>
 
       {loading && runs.length === 0 ? (
         <p className="text-center text-gray-400 py-12">Loading…</p>
@@ -83,36 +105,49 @@ export function JobsPage({ onViewJob }: Props) {
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
-              {runs.map((run) => (
-                <tr key={run.id} className="bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{run.parserName}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[run.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                      {run.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">{formatDate(run.startedAt)}</td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">{formatDuration(run)}</td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300 font-mono text-xs">
-                    {run.stats ? `${run.stats.success}/${run.stats.total}` : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    {(run.stats?.failed ?? 0) > 0 ? (
-                      <span className="text-xs text-red-500 font-medium">{run.stats!.failed}</span>
-                    ) : (
-                      <span className="text-xs text-gray-300 dark:text-gray-600">0</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button onClick={() => onViewJob(run.id)}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-emerald-100 dark:hover:bg-emerald-900 text-gray-600 dark:text-gray-300 hover:text-emerald-700 dark:hover:text-emerald-300 font-medium transition-colors">
-                      View
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+            <motion.tbody
+              className="divide-y divide-gray-100 dark:divide-gray-700/50"
+              variants={{ hidden: {}, show: { transition: { staggerChildren: 0.025 } } }}
+              initial="hidden"
+              animate="show"
+            >
+              {runs.map((run) => {
+                const sc = JOB_STATUS[run.status as keyof typeof JOB_STATUS] ?? UNKNOWN_STATUS
+                return (
+                  <motion.tr
+                    key={run.id}
+                    variants={staggerItemVariants}
+                    className="bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                  >
+                    <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{run.parserName}</td>
+                    <td className="px-4 py-3">
+                      <StatusBadge badgeClass={sc.badge} label={sc.label} />
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">{formatDate(run.startedAt)}</td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">{formatDuration(run)}</td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300 font-mono text-xs">
+                      {run.stats ? `${run.stats.success}/${run.stats.total}` : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      {(run.stats?.failed ?? 0) > 0 ? (
+                        <span className="text-xs text-rose-500 font-medium">{run.stats!.failed}</span>
+                      ) : (
+                        <span className="text-xs text-gray-300 dark:text-gray-600">0</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <SpringButton
+                        variant="ghost"
+                        onClick={() => onViewJob(run.id)}
+                        className="text-xs px-3 py-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900 hover:text-emerald-700 dark:hover:text-emerald-300"
+                      >
+                        View
+                      </SpringButton>
+                    </td>
+                  </motion.tr>
+                )
+              })}
+            </motion.tbody>
           </table>
         </div>
       )}
@@ -138,28 +173,36 @@ export function JobsPage({ onViewJob }: Props) {
 
         return (
           <div className="flex items-center justify-center gap-1 mt-4">
-            <button onClick={() => goTo(page - 1)} disabled={page === 1}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm text-gray-500">
+            <SpringButton
+              variant="ghost"
+              onClick={() => goTo(page - 1)}
+              disabled={page === 1}
+              className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700"
+            >
               ←
-            </button>
+            </SpringButton>
             {pageNumbers().map((p, i) =>
               p === '…' ? (
                 <span key={`ellipsis-${i}`} className="px-2 text-gray-400 text-sm">…</span>
               ) : (
-                <button key={p} onClick={() => goTo(p as number)}
-                  className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                    p === page
-                      ? 'bg-emerald-600 text-white'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                  }`}>
+                <SpringButton
+                  key={p}
+                  variant={p === page ? 'success' : 'ghost'}
+                  onClick={() => goTo(p as number)}
+                  className="w-8 h-8 text-sm"
+                >
                   {p}
-                </button>
+                </SpringButton>
               )
             )}
-            <button onClick={() => goTo(page + 1)} disabled={page >= totalPages}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm text-gray-500">
+            <SpringButton
+              variant="ghost"
+              onClick={() => goTo(page + 1)}
+              disabled={page >= totalPages}
+              className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700"
+            >
               →
-            </button>
+            </SpringButton>
           </div>
         )
       })()}
