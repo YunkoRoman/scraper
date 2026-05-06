@@ -1,15 +1,13 @@
 import { useEffect, useState, useCallback } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { getJob, getJobTasks, getTaskResult, stopJob, resumeJob, retryTask, retryAllFailed } from '../api'
 import type { RunInfo, TaskRow } from '../api'
-
-const STATE_BADGE: Record<string, string> = {
-  pending:     'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
-  in_progress: 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300 animate-pulse',
-  retry:       'bg-yellow-100 text-yellow-600 dark:bg-yellow-500/20 dark:text-yellow-300',
-  success:     'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
-  failed:      'bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400',
-  aborted:     'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
-}
+import { TASK_STATE, UNKNOWN_STATUS } from '../design/status'
+import { StatusBadge } from './motion/StatusBadge'
+import { SpringButton } from './motion/SpringButton'
+import { FadeIn } from './motion/FadeIn'
+import { staggerItemVariants } from './motion/StaggerList'
+import { useReducedMotion } from '../hooks/useReducedMotion'
 
 const FILTERS = ['all', 'pending', 'in_progress', 'retry', 'success', 'failed', 'aborted']
 
@@ -32,6 +30,7 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
   const [taskResult, setTaskResult] = useState<Record<string, unknown>[] | null>(null)
   const [taskResultLoading, setTaskResultLoading] = useState(false)
   const LIMIT = 50
+  const reduced = useReducedMotion()
 
   const loadTasks = useCallback(async (p: number, filter: string) => {
     setLoading(true)
@@ -123,11 +122,16 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
 
   return (
     <div className="flex flex-col h-screen">
-      <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0">
+      <FadeIn as="div" className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0">
         <div className="flex items-center gap-3 flex-wrap">
-          <button onClick={onBack} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-xl leading-none font-bold">
+          <motion.button
+            onClick={onBack}
+            whileHover={{ x: -3 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+            className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-xl leading-none font-bold"
+          >
             ←
-          </button>
+          </motion.button>
           <div>
             <h2 className="text-base font-semibold text-gray-900 dark:text-white">
               {run?.parserName ?? '…'}
@@ -148,25 +152,21 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
           <div className="ml-auto flex flex-col items-end gap-1">
             <div className="flex items-center gap-2">
               {run?.isRunning ? (
-                <button onClick={handleStop} disabled={actionLoading}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold disabled:opacity-50 transition-colors">
+                <SpringButton variant="danger" onClick={handleStop} loading={actionLoading} className="text-xs px-3 py-1.5">
                   {actionLoading ? 'Stopping…' : 'Stop Job'}
-                </button>
+                </SpringButton>
               ) : run?.status === 'stopped' ? (
-                <button onClick={handleResume} disabled={actionLoading}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white font-semibold disabled:opacity-50 transition-colors">
+                <SpringButton variant="warning" onClick={handleResume} loading={actionLoading} className="text-xs px-3 py-1.5">
                   {actionLoading ? 'Resuming…' : 'Resume Job'}
-                </button>
+                </SpringButton>
               ) : (run?.status === 'failed' || run?.status === 'completed') && (stats?.failed ?? 0) > 0 ? (
-                <button onClick={handleRetryAllFailed} disabled={actionLoading}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-white font-semibold disabled:opacity-50 transition-colors">
+                <SpringButton variant="warning" onClick={handleRetryAllFailed} loading={actionLoading} className="text-xs px-3 py-1.5">
                   {actionLoading ? 'Starting…' : `Retry Failed (${stats!.failed})`}
-                </button>
+                </SpringButton>
               ) : null}
-              <button onClick={() => { loadRun(); loadTasks(page, statusFilter) }}
-                className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+              <SpringButton variant="ghost" onClick={() => { loadRun(); loadTasks(page, statusFilter) }} className="text-xs px-3 py-1.5">
                 Refresh
-              </button>
+              </SpringButton>
             </div>
             {actionError && (
               <p className="text-xs text-red-500 mt-2">{actionError}</p>
@@ -187,7 +187,7 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
           ))}
           <span className="ml-auto text-xs text-gray-400 self-center">{total} tasks</span>
         </div>
-      </div>
+      </FadeIn>
 
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 overflow-y-auto">
@@ -207,9 +207,17 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
                   <th className="px-4 py-2"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
-                {tasks.map((task) => (
-                  <tr key={task.id}
+              <motion.tbody
+                className="divide-y divide-gray-100 dark:divide-gray-700/50"
+                variants={{ hidden: {}, show: { transition: { staggerChildren: reduced ? 0 : 0.02 } } }}
+                initial="hidden"
+                animate="show"
+              >
+                {tasks.map((task) => {
+                  const sc = TASK_STATE[task.state as keyof typeof TASK_STATE] ?? UNKNOWN_STATUS
+                  return (
+                  <motion.tr key={task.id}
+                    variants={staggerItemVariants}
                     onClick={() => openTaskDetail(task)}
                     className={`cursor-pointer transition-colors ${
                       selectedTask?.id === task.id
@@ -228,9 +236,7 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
                       <span className="ml-1 text-xs text-gray-400 dark:text-gray-600">({task.stepType[0]})</span>
                     </td>
                     <td className="px-4 py-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATE_BADGE[task.state] ?? ''}`}>
-                        {task.state}
-                      </span>
+                      <StatusBadge badgeClass={sc.badge} label={sc.label} />
                     </td>
                     <td className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400 font-mono">
                       {task.attempts}/{task.maxAttempts}
@@ -256,9 +262,10 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
                         </button>
                       </div>
                     </td>
-                  </tr>
-                ))}
-              </tbody>
+                  </motion.tr>
+                  )}
+                })}
+              </motion.tbody>
             </table>
           )}
 
@@ -281,8 +288,15 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
           )}
         </div>
 
-        {selectedTask && (
-          <div className="w-96 shrink-0 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-y-auto flex flex-col">
+        <AnimatePresence>
+          {selectedTask && (
+            <motion.div
+              className="w-96 shrink-0 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-y-auto flex flex-col"
+              initial={reduced ? { opacity: 0 } : { opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={reduced ? { opacity: 0 } : { opacity: 0, x: 24 }}
+              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            >
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 shrink-0">
               <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Task Detail</span>
               <button onClick={() => setSelectedTask(null)}
@@ -303,9 +317,10 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
                 </div>
                 <div>
                   <p className="text-gray-500 font-medium mb-0.5">Status</p>
-                  <span className={`px-2 py-0.5 rounded-full font-medium ${STATE_BADGE[selectedTask.state] ?? ''}`}>
-                    {selectedTask.state}
-                  </span>
+                  {(() => {
+                    const sc = TASK_STATE[selectedTask.state as keyof typeof TASK_STATE] ?? UNKNOWN_STATUS
+                    return <StatusBadge badgeClass={sc.badge} label={sc.label} />
+                  })()}
                 </div>
                 <div>
                   <p className="text-gray-500 font-medium mb-0.5">Attempts</p>
@@ -353,8 +368,9 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
                 </button>
               )}
             </div>
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   )
