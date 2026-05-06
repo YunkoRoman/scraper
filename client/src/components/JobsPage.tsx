@@ -107,7 +107,7 @@ export function JobsPage({ onViewJob }: Props) {
             </thead>
             <motion.tbody
               className="divide-y divide-gray-100 dark:divide-gray-700/50"
-              variants={{ hidden: {}, show: { transition: { staggerChildren: 0.025 } } }}
+              variants={{ hidden: {}, show: { transition: { staggerChildren: reduced ? 0 : 0.025 } } }}
               initial="hidden"
               animate="show"
             >
