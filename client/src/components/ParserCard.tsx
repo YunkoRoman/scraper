@@ -97,7 +97,7 @@ export function ParserCard({ name, onEdit, onViewJob }: Props) {
           <motion.div
             initial={reduced ? { opacity: 0 } : { opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, y: -4 }}
             transition={{ duration: 0.18 }}
             className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded px-3 py-2"
           >
