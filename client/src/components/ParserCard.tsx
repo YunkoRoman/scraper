@@ -143,7 +143,7 @@ export function ParserCard({ name, onEdit, onViewJob }: Props) {
             <p className="text-xs text-gray-400 dark:text-gray-500 mb-2 font-medium uppercase tracking-wider">Output files</p>
             <motion.div
               className="space-y-1"
-              variants={{ hidden: {}, show: { transition: { staggerChildren: 0.05 } } }}
+              variants={{ hidden: {}, show: { transition: { staggerChildren: reduced ? 0 : 0.05 } } }}
               initial="hidden"
               animate="show"
             >
