@@ -1,20 +1,18 @@
 import { program } from 'commander'
 import { resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { dirname } from 'node:path'
-import { FileParserLoader } from '../infrastructure/loader/FileParserLoader.js'
+import { DbParserLoader } from '../infrastructure/loader/DbParserLoader.js'
 import { RunParser } from '../application/use-cases/RunParser.js'
 import { ParserRunnerService } from '../application/services/ParserRunnerService.js'
+import { RunPersistenceService } from '../infrastructure/db/RunPersistenceService.js'
 import { ConsoleReporter } from './ConsoleReporter.js'
 import type { RunStats } from '../domain/entities/ParserRun.js'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const parsersDir = resolve(__dirname, '../../src/parsers')
 const outputDir = resolve(process.cwd(), 'output')
 
-const loader = new FileParserLoader(parsersDir)
+const loader = new DbParserLoader()
+const runPersistence = new RunPersistenceService()
 const runParser = new RunParser(loader, outputDir)
-const runner = new ParserRunnerService(runParser)
+const runner = new ParserRunnerService(runParser, runPersistence)
 const reporter = new ConsoleReporter()
 
 runner.on('stats', (name: string, stats: RunStats) => reporter.update(name, stats))
