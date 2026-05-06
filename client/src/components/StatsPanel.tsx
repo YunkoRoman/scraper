@@ -1,4 +1,6 @@
+// client/src/components/StatsPanel.tsx
 import type { RunStats } from '../api'
+import { AnimatedNumber } from './motion/AnimatedNumber'
 
 interface Props {
   stats: RunStats
@@ -9,7 +11,7 @@ function ProgressBar({ value, total }: { value: number; total: number }) {
   return (
     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-1">
       <div
-        className="bg-emerald-500 h-1.5 rounded-full transition-all duration-300"
+        className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
         style={{ width: `${pct}%` }}
       />
     </div>
@@ -17,17 +19,9 @@ function ProgressBar({ value, total }: { value: number; total: number }) {
 }
 
 function StatRow({
-  label,
-  total,
-  success,
-  failed,
-  extra,
+  label, total, success, failed, extra,
 }: {
-  label: string
-  total: number
-  success: number
-  failed: number
-  extra?: React.ReactNode
+  label: string; total: number; success: number; failed: number; extra?: React.ReactNode
 }) {
   return (
     <div className="space-y-1">
@@ -36,16 +30,16 @@ function StatRow({
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 justify-end text-gray-600 dark:text-gray-300">
           <span>
             <span className="text-gray-400 dark:text-gray-500">Total </span>
-            <span className="font-mono font-semibold text-gray-900 dark:text-white">{total}</span>
+            <AnimatedNumber value={total} className="font-mono font-semibold text-gray-900 dark:text-white" />
           </span>
           <span>
             <span className="text-gray-400 dark:text-gray-500">OK </span>
-            <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{success}</span>
+            <AnimatedNumber value={success} className="font-mono font-semibold text-emerald-600 dark:text-emerald-400" />
           </span>
           {failed > 0 && (
             <span>
               <span className="text-gray-400 dark:text-gray-500">Fail </span>
-              <span className="font-mono font-semibold text-red-600 dark:text-red-400">{failed}</span>
+              <AnimatedNumber value={failed} className="font-mono font-semibold text-red-600 dark:text-red-400" />
             </span>
           )}
           {extra}
@@ -68,23 +62,13 @@ export function StatsPanel({ stats }: Props) {
           stats.inProgress > 0 ? (
             <span>
               <span className="text-gray-400 dark:text-gray-500">Active </span>
-              <span className="font-mono font-semibold text-yellow-600 dark:text-yellow-400">{stats.inProgress}</span>
+              <AnimatedNumber value={stats.inProgress} className="font-mono font-semibold text-amber-600 dark:text-amber-400" />
             </span>
           ) : null
         }
       />
-      <StatRow
-        label="Traversers"
-        total={stats.traversers.total}
-        success={stats.traversers.success}
-        failed={stats.traversers.failed}
-      />
-      <StatRow
-        label="Extractors"
-        total={stats.extractors.total}
-        success={stats.extractors.success}
-        failed={stats.extractors.failed}
-      />
+      <StatRow label="Traversers" total={stats.traversers.total} success={stats.traversers.success} failed={stats.traversers.failed} />
+      <StatRow label="Extractors" total={stats.extractors.total} success={stats.extractors.success} failed={stats.extractors.failed} />
     </div>
   )
 }
