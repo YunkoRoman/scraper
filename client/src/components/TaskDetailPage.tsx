@@ -1,15 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import { getJob, getTask, getTaskResult, retryTask, abortTask } from '../api'
 import type { RunInfo, TaskRow } from '../api'
-
-const STATE_BADGE: Record<string, string> = {
-  pending:     'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
-  in_progress: 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300 animate-pulse',
-  retry:       'bg-yellow-100 text-yellow-600 dark:bg-yellow-500/20 dark:text-yellow-300',
-  success:     'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
-  failed:      'bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400',
-  aborted:     'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
-}
+import { TASK_STATE, UNKNOWN_STATUS } from '../design/status'
+import { StatusBadge } from './motion/StatusBadge'
+import { SpringButton } from './motion/SpringButton'
+import { FadeIn } from './motion/FadeIn'
+import { MotionCard } from './motion/MotionCard'
 
 const TERMINAL = new Set(['success', 'failed', 'aborted'])
 
@@ -80,22 +77,26 @@ export function TaskDetailPage({ runId, taskId, onBack }: Props) {
 
   const canRetry = task && (task.state === 'failed' || task.state === 'aborted') && run?.isRunning
   const canAbort = task && (task.state === 'pending' || task.state === 'in_progress' || task.state === 'retry') && run?.isRunning
+  const taskConfig = task ? (TASK_STATE[task.state as keyof typeof TASK_STATE] ?? UNKNOWN_STATUS) : UNKNOWN_STATUS
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-3xl mx-auto">
+    <FadeIn as="div" className="px-4 sm:px-6 lg:px-8 py-6 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack}
-          className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-xl leading-none font-bold">
+        <motion.button
+          onClick={onBack}
+          whileHover={{ x: -3 }}
+          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+          className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-xl leading-none font-bold"
+        >
           ←
-        </button>
+        </motion.button>
         <div>
           <h2 className="text-base font-semibold text-gray-900 dark:text-white">Task Detail</h2>
           <p className="text-xs text-gray-500 font-mono">{taskId.slice(0, 8)}…</p>
         </div>
-        <button onClick={loadData}
-          className="ml-auto text-xs px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+        <SpringButton variant="ghost" onClick={loadData} className="ml-auto text-xs px-3 py-1.5">
           Refresh
-        </button>
+        </SpringButton>
       </div>
 
       {loadError && (
@@ -108,7 +109,7 @@ export function TaskDetailPage({ runId, taskId, onBack }: Props) {
         <p className="text-center text-gray-400 py-12">Loading…</p>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5 space-y-4">
+          <MotionCard className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5 space-y-4">
             <div>
               <p className="text-xs text-gray-500 font-medium mb-1 uppercase tracking-wider">URL</p>
               <a href={task.url} target="_blank" rel="noopener noreferrer"
@@ -120,9 +121,7 @@ export function TaskDetailPage({ runId, taskId, onBack }: Props) {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-xs text-gray-500 font-medium mb-1 uppercase tracking-wider">Status</p>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATE_BADGE[task.state] ?? ''}`}>
-                  {task.state}
-                </span>
+                <StatusBadge badgeClass={taskConfig.badge} label={taskConfig.label} />
               </div>
               <div>
                 <p className="text-xs text-gray-500 font-medium mb-1 uppercase tracking-wider">Step</p>
@@ -182,32 +181,30 @@ export function TaskDetailPage({ runId, taskId, onBack }: Props) {
                 )}
               </div>
             )}
-          </div>
+          </MotionCard>
 
           {(canRetry || canAbort) && (
-            <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5">
+            <MotionCard className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5">
               <p className="text-xs text-gray-500 font-medium mb-3 uppercase tracking-wider">Actions</p>
               {actionError && (
                 <p className="text-xs text-red-500 mb-3">{actionError}</p>
               )}
               <div className="flex gap-2 flex-wrap">
                 {canRetry && (
-                  <button onClick={handleRetry} disabled={actionLoading !== null}
-                    className="text-sm px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-400 text-white font-semibold disabled:opacity-50 transition-colors">
+                  <SpringButton variant="warning" onClick={handleRetry} loading={actionLoading === 'retry'} disabled={actionLoading !== null} className="text-sm px-4 py-2">
                     {actionLoading === 'retry' ? 'Retrying…' : 'Retry'}
-                  </button>
+                  </SpringButton>
                 )}
                 {canAbort && (
-                  <button onClick={handleAbort} disabled={actionLoading !== null}
-                    className="text-sm px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold disabled:opacity-50 transition-colors">
+                  <SpringButton variant="danger" onClick={handleAbort} loading={actionLoading === 'abort'} disabled={actionLoading !== null} className="text-sm px-4 py-2">
                     {actionLoading === 'abort' ? 'Aborting…' : 'Abort'}
-                  </button>
+                  </SpringButton>
                 )}
               </div>
-            </div>
+            </MotionCard>
           )}
         </div>
       )}
-    </div>
+    </FadeIn>
   )
 }
