@@ -94,8 +94,8 @@ export const TASK_STATE = {
 
 // Fallback for unknown status keys
 export const UNKNOWN_STATUS = {
-  badge: 'bg-gray-100 text-gray-600',
-  dot:   'bg-gray-300',
+  badge: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+  dot:   'bg-gray-300 dark:bg-gray-500',
   label: 'Unknown',
   pulse: false,
 }
