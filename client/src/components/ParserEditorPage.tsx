@@ -6,6 +6,9 @@ import { StepDebugPanel } from './StepDebugPanel'
 import { ParserSettingsPanel } from './ParserSettingsPanel'
 import { createParser, type CreateParserInput } from '../api'
 import { useTheme } from '../hooks/useTheme'
+import { AnimatePresence, motion } from 'framer-motion'
+import { SpringButton } from './motion/SpringButton'
+import { staggerItemVariants } from './motion/StaggerList'
 
 const TRAVERSER_TEMPLATE = `// page: Playwright/Puppeteer Page
 // task: { url: string, parent_data?: Record<string, unknown> }
@@ -145,10 +148,15 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
       <div className="px-4 sm:px-6 lg:px-8 py-8 max-w-lg">
         <h2 className="text-lg font-semibold mb-5">New Parser</h2>
         {createError && <p className="text-red-500 text-sm mb-3">{createError}</p>}
-        <div className="flex flex-col gap-4">
+        <motion.div
+          className="flex flex-col gap-4"
+          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
+          initial="hidden"
+          animate="show"
+        >
 
           {/* Name */}
-          <div>
+          <motion.div variants={staggerItemVariants}>
             <label className={labelClass}>Name <span className="text-red-500">*</span></label>
             <input
               value={newParserName}
@@ -158,10 +166,10 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
               className={fieldClass}
             />
             <p className="text-xs text-gray-400 mt-1">Lowercase letters, numbers, hyphens</p>
-          </div>
+          </motion.div>
 
           {/* Entry URL */}
-          <div>
+          <motion.div variants={staggerItemVariants}>
             <label className={labelClass}>Entry URL</label>
             <input
               type="url"
@@ -170,10 +178,10 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
               placeholder="https://example.com"
               className={fieldClass}
             />
-          </div>
+          </motion.div>
 
           {/* Browser */}
-          <div>
+          <motion.div variants={staggerItemVariants}>
             <label className={labelClass}>Browser</label>
             <select
               value={newParserBrowser}
@@ -184,10 +192,10 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
               <option value="playwright-stealth">Playwright Stealth</option>
               <option value="puppeteer">Puppeteer</option>
             </select>
-          </div>
+          </motion.div>
 
           {/* Retries + Quota row */}
-          <div className="grid grid-cols-2 gap-4">
+          <motion.div variants={staggerItemVariants} className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>Max Retries</label>
               <input
@@ -212,47 +220,51 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
                 className={fieldClass}
               />
             </div>
-          </div>
+          </motion.div>
 
           {/* Deduplication */}
-          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700 dark:text-gray-300">
-            <input
-              type="checkbox"
-              checked={newParserDedup}
-              onChange={(e) => setNewParserDedup(e.target.checked)}
-              className="accent-emerald-600 w-4 h-4"
-            />
-            Deduplication (skip already-visited URLs)
-          </label>
+          <motion.div variants={staggerItemVariants}>
+            <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700 dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={newParserDedup}
+                onChange={(e) => setNewParserDedup(e.target.checked)}
+                className="accent-emerald-600 w-4 h-4"
+              />
+              Deduplication (skip already-visited URLs)
+            </label>
+          </motion.div>
 
           {/* Browser Settings JSON (advanced) */}
-          <details>
-            <summary className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer select-none">
-              Browser Settings (advanced)
-            </summary>
-            <div className="mt-2">
-              <textarea
-                value={newParserBrowserJson}
-                onChange={(e) => { setNewParserBrowserJson(e.target.value); setNewParserBrowserJsonError(false) }}
-                rows={5}
-                spellCheck={false}
-                placeholder={'{\n  "userAgent": "Mozilla/5.0 ...",\n  "contextOptions": { "locale": "en-US" }\n}'}
-                className={[
-                  'w-full rounded-lg border px-3 py-2 font-mono text-xs resize-y bg-white dark:bg-gray-900',
-                  'text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600',
-                  newParserBrowserJsonError
-                    ? 'border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400'
-                    : 'border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-emerald-400',
-                ].join(' ')}
-              />
-              {newParserBrowserJsonError && (
-                <p className="text-xs text-red-500 mt-1">Invalid JSON</p>
-              )}
-            </div>
-          </details>
+          <motion.div variants={staggerItemVariants}>
+            <details>
+              <summary className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                Browser Settings (advanced)
+              </summary>
+              <div className="mt-2">
+                <textarea
+                  value={newParserBrowserJson}
+                  onChange={(e) => { setNewParserBrowserJson(e.target.value); setNewParserBrowserJsonError(false) }}
+                  rows={5}
+                  spellCheck={false}
+                  placeholder={'{\n  "userAgent": "Mozilla/5.0 ...",\n  "contextOptions": { "locale": "en-US" }\n}'}
+                  className={[
+                    'w-full rounded-lg border px-3 py-2 font-mono text-xs resize-y bg-white dark:bg-gray-900',
+                    'text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600',
+                    newParserBrowserJsonError
+                      ? 'border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400'
+                      : 'border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-emerald-400',
+                  ].join(' ')}
+                />
+                {newParserBrowserJsonError && (
+                  <p className="text-xs text-red-500 mt-1">Invalid JSON</p>
+                )}
+              </div>
+            </details>
+          </motion.div>
 
           {/* Actions */}
-          <div className="flex gap-2 pt-1">
+          <motion.div variants={staggerItemVariants} className="flex gap-2 pt-1">
             <button
               onClick={onNavigateToParsers}
               className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -266,9 +278,9 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
             >
               {creating ? 'Creating...' : 'Create Parser'}
             </button>
-          </div>
+          </motion.div>
 
-        </div>
+        </motion.div>
       </div>
     )
   }
@@ -340,14 +352,28 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
           >
             ⚙ Settings
           </button>
-          <span className="text-xs text-gray-400">{saveStatusLabel}</span>
-          <button
+          <AnimatePresence mode="wait">
+            {saveStatusLabel && (
+              <motion.span
+                key={saveStatusLabel}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.18 }}
+                className={`text-xs ${saveStatus === 'error' ? 'text-rose-400' : saveStatus === 'saved' ? 'text-emerald-500' : 'text-gray-400'}`}
+              >
+                {saveStatusLabel}
+              </motion.span>
+            )}
+          </AnimatePresence>
+          <SpringButton
+            variant="primary"
             onClick={saveNow}
-            disabled={saveStatus === 'saving'}
-            className="px-3 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded font-medium transition-colors"
+            loading={saveStatus === 'saving'}
+            className="px-3 py-1 text-xs"
           >
             Save
-          </button>
+          </SpringButton>
         </div>
       </div>
 
@@ -411,30 +437,44 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
             </div>
           )}
 
-          {steps.map((s) => (
-            <div
-              key={s.name}
-              onClick={() => selectStep(s.name)}
-              className={[
-                'group flex items-center justify-between px-3 py-2 cursor-pointer text-xs border-b border-gray-100 dark:border-gray-800',
-                selectedStepName === s.name
-                  ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800',
-              ].join(' ')}
-            >
-              <div>
-                <div className="font-medium">{s.name}</div>
-                <div className="text-gray-400 dark:text-gray-500">{s.type}</div>
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); removeStep(s.name) }}
-                className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity text-base leading-none"
-                title="Delete step"
+          <AnimatePresence initial={false}>
+            {steps.map((s) => (
+              <motion.div
+                key={s.name}
+                variants={staggerItemVariants}
+                initial="hidden"
+                animate="show"
+                exit={{ opacity: 0, x: -16, transition: { duration: 0.18 } }}
+                onClick={() => selectStep(s.name)}
+                className={[
+                  'group relative flex items-center justify-between px-3 py-2 cursor-pointer text-xs border-b border-gray-100 dark:border-gray-800',
+                  selectedStepName === s.name
+                    ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800',
+                ].join(' ')}
               >
-                ×
-              </button>
-            </div>
-          ))}
+                {/* Active step sliding indicator */}
+                {selectedStepName === s.name && (
+                  <motion.span
+                    layoutId="active-step-bar"
+                    className="absolute left-0 top-0 bottom-0 w-0.5 rounded-r bg-violet-500"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <div>
+                  <div className="font-medium">{s.name}</div>
+                  <div className="text-gray-400 dark:text-gray-500">{s.type}</div>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); removeStep(s.name) }}
+                  className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity text-base leading-none"
+                  title="Delete step"
+                >
+                  ×
+                </button>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
 
         {/* Editor panel */}
@@ -520,14 +560,24 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
                     }}
                   />
                 </div>
-                {showDebug && selectedStep && (
-                  <StepDebugPanel
-                    parserName={parserName}
-                    stepName={selectedStep.name}
-                    initialUrl={selectedStep.entryUrl}
-                    onClose={() => setShowDebug(false)}
-                  />
-                )}
+                <AnimatePresence>
+                  {showDebug && selectedStep && (
+                    <motion.div
+                      initial={{ opacity: 0, x: 32 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 32 }}
+                      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                      className="contents"
+                    >
+                      <StepDebugPanel
+                        parserName={parserName}
+                        stepName={selectedStep.name}
+                        initialUrl={selectedStep.entryUrl}
+                        onClose={() => setShowDebug(false)}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </>
           ) : (
