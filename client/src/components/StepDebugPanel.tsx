@@ -1,5 +1,7 @@
 // client/src/components/StepDebugPanel.tsx
 import { useEffect, useRef, useState } from 'react'
+import ReactJsonModule from 'react-json-view'
+const ReactJson = (ReactJsonModule as any).default || ReactJsonModule
 import { useDebugRun } from '../hooks/useDebugRun'
 import { JsonEditor } from './JsonEditor'
 
@@ -10,6 +12,36 @@ function parseJsonSafe(s: string): Record<string, unknown> | undefined {
     if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>
   } catch { /* ignore */ }
   return undefined
+}
+
+const LogLine = ({ line }: { line: any }) => {
+  const content = line.args.join(' ')
+  
+  // Try to parse the log line as JSON
+  let jsonData = null
+  try {
+    if (content.startsWith('[browser:debug] ')) {
+        jsonData = JSON.parse(content.replace('[browser:debug] ', ''))
+    }
+  } catch {}
+
+  return (
+    <div className={line.level === 'error' ? 'text-red-400' : 'text-gray-300'}>
+      <span className="text-emerald-500 mr-1">[{line.stepName}]</span>
+      {jsonData ? (
+        <ReactJson 
+          src={jsonData} 
+          theme="monokai" 
+          collapsed={1} 
+          displayDataTypes={false} 
+          enableClipboard={false}
+          style={{ backgroundColor: 'transparent', fontSize: '12px' }}
+        />
+      ) : (
+        content
+      )}
+    </div>
+  )
 }
 
 interface Props {
@@ -115,10 +147,7 @@ export function StepDebugPanel({ parserName, stepName, initialUrl, onClose }: Pr
           <span className="text-gray-600">Waiting for output…</span>
         ) : null}
         {logs.map((line, i) => (
-          <div key={i} className={line.level === 'error' ? 'text-red-400' : 'text-gray-300'}>
-            <span className="text-emerald-500 mr-1">[{line.stepName}]</span>
-            {line.args.join(' ')}
-          </div>
+          <LogLine key={i} line={line} />
         ))}
         {status === 'done' && <div className="text-emerald-400 mt-1">✓ Done</div>}
         {status === 'error' && <div className="text-red-400 mt-1">✗ {error}</div>}
