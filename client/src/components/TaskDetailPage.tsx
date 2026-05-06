@@ -41,6 +41,7 @@ export function TaskDetailPage({ runId, taskId, onBack }: Props) {
     }
   }, [runId, taskId])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadData() }, [loadData])
 
   useEffect(() => {

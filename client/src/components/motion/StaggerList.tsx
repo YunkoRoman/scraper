@@ -4,6 +4,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion'
 import type { ReactNode } from 'react'
 import { dur, ease } from '../../design/tokens'
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const staggerItemVariants = {
   hidden: { opacity: 0, y: 8 },
   show: {

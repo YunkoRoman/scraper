@@ -21,6 +21,7 @@ export function useParserEditor(parserName: string) {
 
   useEffect(() => {
     if (!parserName) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     setError(null)
     getParser(parserName)

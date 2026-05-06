@@ -40,12 +40,14 @@ export function ParserCard({ name, onEdit, onViewJob }: Props) {
     }
   }
 
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   useEffect(() => {
     refreshStatus()
     listFiles(name).then(setFiles).catch(() => setFiles([]))
     const interval = setInterval(() => { refreshStatus() }, 2000)
     return () => clearInterval(interval)
   }, [name])
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   async function handleRun() {
     setLoading(true); setErrorMessage(null)

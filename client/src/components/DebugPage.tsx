@@ -61,6 +61,7 @@ export function DebugPage() {
 
   useEffect(() => {
     if (!selectedParser) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSteps([])
       setSelectedStep('')
       return

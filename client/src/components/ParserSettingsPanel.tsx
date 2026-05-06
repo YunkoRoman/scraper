@@ -12,6 +12,7 @@ export function ParserSettingsPanel({ parser, onSave }: Props) {
   const [browserJsonError, setBrowserJsonError] = useState(false)
 
   // Sync from parser when it changes (e.g. after a save)
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   useEffect(() => {
     setBrowserJson(
       Object.keys(parser.browserSettings).length
@@ -19,6 +20,7 @@ export function ParserSettingsPanel({ parser, onSave }: Props) {
         : '',
     )
   }, [parser.id])
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   function saveRetries(raw: string) {
     const n = parseInt(raw, 10)

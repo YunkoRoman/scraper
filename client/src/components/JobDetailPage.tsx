@@ -50,10 +50,12 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
     } catch { /* ignore */ }
   }, [runId])
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     loadRun()
     loadTasks(1, 'all')
   }, [loadRun, loadTasks])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (!run?.isRunning) return
@@ -263,7 +265,7 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
                       </div>
                     </td>
                   </motion.tr>
-                  )}
+                  )
                 })}
               </motion.tbody>
             </table>

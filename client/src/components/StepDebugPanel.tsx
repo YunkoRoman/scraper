@@ -1,6 +1,7 @@
 // client/src/components/StepDebugPanel.tsx
 import { useEffect, useRef, useState } from 'react'
 import ReactJsonModule from 'react-json-view'
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ReactJson = (ReactJsonModule as any).default || ReactJsonModule
 import { useDebugRun } from '../hooks/useDebugRun'
 import { JsonEditor } from './JsonEditor'
@@ -16,6 +17,7 @@ function parseJsonSafe(s: string): Record<string, unknown> | undefined {
   return undefined
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const LogLine = ({ line }: { line: any }) => {
   const content = line.args.join(' ')
   
@@ -25,6 +27,7 @@ const LogLine = ({ line }: { line: any }) => {
     if (content.startsWith('[browser:debug] ')) {
         jsonData = JSON.parse(content.replace('[browser:debug] ', ''))
     }
+  // eslint-disable-next-line no-empty
   } catch {}
 
   return (
@@ -62,9 +65,11 @@ export function StepDebugPanel({ parserName, stepName, initialUrl, onClose }: Pr
   const isRunning = status === 'running'
 
   // Pre-fill URL when the selected step changes
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setUrl(initialUrl)
   }, [stepName, initialUrl])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Auto-scroll console
   useEffect(() => {

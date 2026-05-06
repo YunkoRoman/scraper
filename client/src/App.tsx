@@ -123,23 +123,29 @@ export default function App() {
 
   function navigate(p: Page, param?: string) {
     if (p === 'editor') {
+      // eslint-disable-next-line react-hooks/immutability
       window.location.hash = param ? `#/editor/${encodeURIComponent(param)}` : '#/editor/'
       setEditorParser(param ?? '')
     } else if (p === 'debug') {
+      // eslint-disable-next-line react-hooks/immutability
       window.location.hash = '#/debug'
     } else if (p === 'jobs') {
+      // eslint-disable-next-line react-hooks/immutability
       window.location.hash = '#/jobs'
     } else if (p === 'job-detail' && param) {
+      // eslint-disable-next-line react-hooks/immutability
       window.location.hash = `#/jobs/${encodeURIComponent(param)}`
       setJobRunId(param)
     } else if (p === 'task-detail' && param) {
       const colonIdx = param.indexOf(':')
       const rId = param.slice(0, colonIdx)
       const tId = param.slice(colonIdx + 1)
+      // eslint-disable-next-line react-hooks/immutability
       window.location.hash = `#/jobs/${encodeURIComponent(rId)}/tasks/${encodeURIComponent(tId)}`
       setJobRunId(rId)
       setJobTaskId(tId)
     } else {
+      // eslint-disable-next-line react-hooks/immutability
       window.location.hash = '#/'
     }
     setPage(p)

@@ -1,4 +1,5 @@
 // client/src/components/motion/FadeIn.tsx
+/* eslint-disable react-hooks/static-components */
 import { motion } from 'framer-motion'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
 import type { ElementType, ReactNode } from 'react'

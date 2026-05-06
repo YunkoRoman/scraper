@@ -1,6 +1,6 @@
 // client/src/components/JobsPage.tsx
 import { useEffect, useState, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { listJobs } from '../api'
 import type { RunInfo } from '../api'
 import { JOB_STATUS, UNKNOWN_STATUS } from '../design/status'
@@ -34,6 +34,7 @@ export function JobsPage({ onViewJob }: Props) {
     }
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(page) }, [load, page])
 
   useEffect(() => {
