@@ -5,6 +5,9 @@ import type { StepInfo } from '../api'
 import { JsonEditor } from './JsonEditor'
 import { useDebugRun } from '../hooks/useDebugRun'
 import type { DebugResult } from '../hooks/useDebugRun'
+import { motion, AnimatePresence } from 'framer-motion'
+import { FadeIn } from './motion/FadeIn'
+import { SpringButton } from './motion/SpringButton'
 
 function parseJsonSafe(s: string): Record<string, unknown> | undefined {
   if (!s.trim()) return undefined
@@ -106,7 +109,7 @@ export function DebugPage() {
     'focus:outline-none focus:ring-1 focus:ring-emerald-400'
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 py-5 sm:py-8 flex flex-col gap-6 max-w-5xl mx-auto">
+    <FadeIn as="div" className="w-full px-4 sm:px-6 lg:px-8 py-5 sm:py-8 flex flex-col gap-6 max-w-5xl mx-auto">
       <h2 className="text-lg font-bold text-gray-900 dark:text-white">Debug Step Runner</h2>
 
       {/* Config panel */}
@@ -173,13 +176,15 @@ export function DebugPage() {
         </div>
 
         {/* Run button */}
-        <button
+        <SpringButton
+          variant="primary"
           onClick={handleRun}
           disabled={!canRun}
-          className="self-start bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition-colors active:scale-95"
+          loading={isRunning}
+          className="self-start text-sm px-6 py-2.5"
         >
           {isRunning ? 'Running…' : 'Run'}
-        </button>
+        </SpringButton>
       </div>
 
       {/* Output — only when there's something to show */}
@@ -196,15 +201,20 @@ export function DebugPage() {
               {logs.length === 0 && (
                 <span className="text-gray-600">Waiting for output…</span>
               )}
-              {logs.map((line, i) => (
-                <div
-                  key={i}
-                  className={line.level === 'error' ? 'text-red-400' : 'text-gray-300'}
-                >
-                  <span className="text-emerald-500 mr-1">[{line.stepName}]</span>
-                  {line.args.join(' ')}
-                </div>
-              ))}
+              <AnimatePresence initial={false}>
+                {logs.map((line, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className={line.level === 'error' ? 'text-red-400' : 'text-gray-300'}
+                  >
+                    <span className="text-emerald-500 mr-1">[{line.stepName}]</span>
+                    {line.args.join(' ')}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
               {status === 'done' && (
                 <div className="text-emerald-400 mt-1">✓ Done</div>
               )}
@@ -229,6 +239,6 @@ export function DebugPage() {
 
         </div>
       )}
-    </div>
+    </FadeIn>
   )
 }

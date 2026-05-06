@@ -4,6 +4,8 @@ import ReactJsonModule from 'react-json-view'
 const ReactJson = (ReactJsonModule as any).default || ReactJsonModule
 import { useDebugRun } from '../hooks/useDebugRun'
 import { JsonEditor } from './JsonEditor'
+import { motion, AnimatePresence } from 'framer-motion'
+import { SpringButton } from './motion/SpringButton'
 
 function parseJsonSafe(s: string): Record<string, unknown> | undefined {
   if (!s.trim()) return undefined
@@ -117,13 +119,15 @@ export function StepDebugPanel({ parserName, stepName, initialUrl, onClose }: Pr
         </details>
 
         <div className="flex gap-2">
-          <button
+          <SpringButton
+            variant="primary"
             onClick={() => run(parserName, stepName, url, parseJsonSafe(parentDataJson))}
             disabled={!canRun}
-            className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold px-3 py-2 rounded transition-colors"
+            loading={isRunning}
+            className="flex-1 text-xs px-3 py-2"
           >
             {isRunning ? 'Running…' : '▶ Run'}
-          </button>
+          </SpringButton>
           {(status !== 'idle') && (
             <button
               onClick={reset}
@@ -146,9 +150,18 @@ export function StepDebugPanel({ parserName, stepName, initialUrl, onClose }: Pr
         ) : logs.length === 0 ? (
           <span className="text-gray-600">Waiting for output…</span>
         ) : null}
-        {logs.map((line, i) => (
-          <LogLine key={i} line={line} />
-        ))}
+        <AnimatePresence initial={false}>
+          {logs.map((line, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, x: -6 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.12 }}
+            >
+              <LogLine line={line} />
+            </motion.div>
+          ))}
+        </AnimatePresence>
         {status === 'done' && <div className="text-emerald-400 mt-1">✓ Done</div>}
         {status === 'error' && <div className="text-red-400 mt-1">✗ {error}</div>}
       </div>
