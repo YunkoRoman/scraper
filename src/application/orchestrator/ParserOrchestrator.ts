@@ -211,13 +211,9 @@ export class ParserOrchestrator extends EventEmitter {
       }
       case 'DATA_EXTRACTED': {
         for (const row of msg.rows) {
-          const stringRow: Record<string, string> = {}
-          for (const [k, v] of Object.entries(row)) {
-            stringRow[k] = v == null ? '' : String(v)
-          }
-          this.writeCsvRow(msg.outputFile, stringRow)
+          this.writeCsvRow(msg.outputFile, row)
         }
-        this.emit('data_extracted', { taskId: msg.taskId, rows: msg.rows })
+        this.emit('data_extracted', { taskId: msg.taskId, rows: msg.rows, task: this.run.getTask(msg.taskId) })
         break
       }
       case 'PAGE_SUCCESS': {
@@ -301,7 +297,7 @@ export class ParserOrchestrator extends EventEmitter {
     }
   }
 
-  private writeCsvRow(outputFile: string, data: Record<string, string>): void {
+  private writeCsvRow(outputFile: string, data: Record<string, unknown>): void {
     const filePath = resolve(this.outputDir, outputFile)
     if (!this.csvWriters.has(filePath)) {
       this.csvWriters.set(filePath, new CsvWriter(filePath))

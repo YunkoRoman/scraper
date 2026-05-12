@@ -185,8 +185,11 @@ export class ParserRunnerService extends EventEmitter {
       this.runPersistence.upsertTask(orchestrator.runId, task).catch(console.error)
       this.emit('task_done', orchestrator.runId, task)
     })
-    orchestrator.on('data_extracted', ({ taskId, rows }: { taskId: string; rows: Record<string, unknown>[] }) => {
-      this.runPersistence.saveTaskResult(taskId, rows).catch(console.error)
+    orchestrator.on('data_extracted', ({ taskId, rows, task }: { taskId: string; rows: Record<string, unknown>[]; task: PageTask | undefined }) => {
+      const save = task
+        ? this.runPersistence.upsertTask(orchestrator.runId, task).then(() => this.runPersistence.saveTaskResult(taskId, rows))
+        : this.runPersistence.saveTaskResult(taskId, rows)
+      save.catch(console.error)
     })
   }
 }

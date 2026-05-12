@@ -231,9 +231,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white transition-colors duration-200">
+    <div className="h-screen overflow-hidden flex flex-col bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white transition-colors duration-200">
       {/* Header */}
-      <header className="border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur sticky top-0 z-10">
+      <header className="shrink-0 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur z-10">
         {/* Gradient accent strip */}
         <div className="h-0.5 bg-gradient-to-r from-violet-500 via-emerald-500 to-violet-500" />
         <div className="w-full px-4 sm:px-6 lg:px-8 py-3 sm:py-4 flex items-center gap-3">
@@ -244,7 +244,7 @@ export default function App() {
             </svg>
           </div>
           <h1 className="text-base sm:text-lg font-extrabold tracking-tight m-0 text-gray-900 dark:text-white">
-            Scraper Platform
+            Parser
           </h1>
 
           {/* Nav */}
@@ -287,7 +287,7 @@ export default function App() {
       </header>
 
       {/* Main with page transitions */}
-      <main className="w-full">
+      <main className="flex-1 min-h-0 overflow-auto w-full">
         <AnimatePresence mode="wait">
           <PageTransition key={page}>
             {renderPage()}

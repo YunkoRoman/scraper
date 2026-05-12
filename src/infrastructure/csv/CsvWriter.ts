@@ -1,4 +1,4 @@
-import { createWriteStream, existsSync } from 'node:fs'
+import { createWriteStream } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { format } from 'fast-csv'
@@ -10,15 +10,25 @@ export class CsvWriter {
 
   constructor(private readonly filePath: string) {}
 
-  async write(row: Record<string, string>): Promise<void> {
+  async write(row: Record<string, unknown>): Promise<void> {
+    const serialized = Object.fromEntries(
+      Object.entries(row).map(([k, v]) => [
+        k,
+        v === null || v === undefined
+          ? ''
+          : typeof v === 'object'
+            ? JSON.stringify(v)
+            : String(v),
+      ])
+    )
     if (!this.stream) {
       await mkdir(dirname(this.filePath), { recursive: true })
       this.writeStream = createWriteStream(this.filePath, { flags: 'w' })
-      this.headers = Object.keys(row)
+      this.headers = Object.keys(serialized)
       this.stream = format({ headers: this.headers, includeEndRowDelimiter: true, writeBOM: false })
       this.stream.pipe(this.writeStream)
     }
-    this.stream.write(row)
+    this.stream.write(serialized)
   }
 
   close(): Promise<void> {

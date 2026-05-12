@@ -299,7 +299,7 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-57px)]">
+    <div className="flex flex-col h-full">
       {/* Parser header bar */}
       <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-2 flex items-center gap-4 flex-wrap">
         <button onClick={onNavigateToParsers} className="text-sm text-gray-500 hover:text-gray-900 dark:hover:text-white">←</button>
@@ -478,7 +478,7 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
         </div>
 
         {/* Editor panel */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col">
           {selectedStep ? (
             <>
               {/* Step meta bar */}

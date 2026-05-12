@@ -12,6 +12,7 @@ export function PageTransition({ children }: Props) {
 
   return (
     <motion.div
+      className="h-full"
       initial={{ opacity: 0, y: reduced ? 0 : 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: reduced ? 0 : -6 }}
