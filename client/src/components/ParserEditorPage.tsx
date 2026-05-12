@@ -542,7 +542,7 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
                   onSave={(settings) => saveStepMeta(selectedStep.name, { stepSettings: settings })}
                 />
               )}
-              <div className="flex flex-1 overflow-hidden min-h-0">
+              <div className="relative flex flex-1 overflow-hidden min-h-0">
                 <div className="flex-1 overflow-hidden min-w-0">
                   <Editor
                     key={selectedStepName ?? ''}
@@ -563,11 +563,12 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
                 <AnimatePresence>
                   {showDebug && selectedStep && (
                     <motion.div
-                      initial={{ opacity: 0, x: 32 }}
+                      key="debug-panel"
+                      initial={{ opacity: 0, x: '100%' }}
                       animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 32 }}
+                      exit={{ opacity: 0, x: '100%' }}
                       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                      className="contents"
+                      className="absolute right-0 top-0 h-full z-10 shadow-xl"
                     >
                       <StepDebugPanel
                         parserName={parserName}

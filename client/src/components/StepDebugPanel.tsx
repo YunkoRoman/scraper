@@ -82,7 +82,7 @@ export function StepDebugPanel({ parserName, stepName, initialUrl, onClose }: Pr
   const canRun = !isRunning && !!url.trim() && !parentDataError
 
   return (
-    <div className="w-80 xl:w-96 shrink-0 border-l border-gray-200 dark:border-gray-800 flex flex-col bg-white dark:bg-gray-900">
+    <div className="w-80 xl:w-96 h-full border-l border-gray-200 dark:border-gray-800 flex flex-col bg-white dark:bg-gray-900">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-800 shrink-0">
         <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Run: {stepName}</span>
@@ -104,6 +104,7 @@ export function StepDebugPanel({ parserName, stepName, initialUrl, onClose }: Pr
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             disabled={isRunning}
+            autoFocus
             placeholder="https://example.com/page"
             className="w-full text-xs px-2 py-1.5 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 font-mono placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-emerald-400 disabled:opacity-50"
           />
