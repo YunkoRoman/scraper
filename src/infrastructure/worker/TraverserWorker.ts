@@ -22,11 +22,42 @@ const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as
 let adapter: BrowserAdapter<any> = createBrowserAdapter()
 let running = true
 let concurrency = 3
+let pageDelayMin = 0
+let pageDelayMax = 0
+let maxPagesPerContext = 0
+let pagesProcessed = 0
+let rotating = false
+let needsRotation = false
+let contextKilledCount = 0
 let activeCount = 0
 const queue: PageTask[] = []
+let savedSettings: StepSettings = {}
+
+function randomDelay(min: number, max: number): Promise<void> {
+  const ms = min + Math.random() * (max - min)
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function rotateAdapter(): Promise<void> {
+  console.log('[worker] Rotating browser context…')
+  await adapter.close().catch(console.error)
+  adapter = createBrowserAdapter(savedSettings.browser_type, savedSettings)
+  await adapter.launch()
+  if (savedSettings.initScripts?.length) {
+    const pa = adapter as import('../browser/PlaywrightAdapter.js').PlaywrightAdapter
+    for (const script of savedSettings.initScripts) {
+      await pa.addInitScript(script)
+    }
+  }
+  console.log('[worker] Browser context rotated.')
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function processPage(task: PageTask, step: Traverser<any>): Promise<void> {
+async function processPage(task: PageTask, step: Traverser<any>): Promise<boolean> {
+  if (pageDelayMin > 0 || pageDelayMax > 0) {
+    await randomDelay(pageDelayMin, Math.max(pageDelayMin, pageDelayMax))
+  }
+
   const page = await adapter.newPage()
 
   // Direct tunnel to Node.js console
@@ -46,9 +77,12 @@ async function processPage(task: PageTask, step: Traverser<any>): Promise<void> 
     const items = await step.run(page, task)
     parentPort!.postMessage({ type: 'LINKS_DISCOVERED', taskId: task.id, items } satisfies WorkerOutMessage)
     parentPort!.postMessage({ type: 'PAGE_SUCCESS', taskId: task.id } satisfies WorkerOutMessage)
+    return true
   } catch (err) {
     console.error(`[FAIL] ${task.url}\n`, err)
-    parentPort!.postMessage({ type: 'PAGE_FAILED', taskId: task.id, error: String(err) } satisfies WorkerOutMessage)
+    const html = await page.content().catch(() => undefined)
+    parentPort!.postMessage({ type: 'PAGE_FAILED', taskId: task.id, error: String(err), html } satisfies WorkerOutMessage)
+    return false
   } finally {
     await page.close()
   }
@@ -56,10 +90,34 @@ async function processPage(task: PageTask, step: Traverser<any>): Promise<void> 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function drainQueue(step: Traverser<any>): void {
+  if (rotating) return
+  // Failure rotation: immediate — kills any in-flight pages (they will fail but don't re-trigger rotation)
+  if (needsRotation) {
+    rotating = true
+    needsRotation = false
+    contextKilledCount = activeCount
+    rotateAdapter()
+      .then(() => { pagesProcessed = 0; rotating = false; drainQueue(step) })
+      .catch(console.error)
+    return
+  }
+  // Quota rotation: wait for in-flight pages to finish cleanly
+  if (maxPagesPerContext > 0 && pagesProcessed >= maxPagesPerContext && activeCount === 0) {
+    rotating = true
+    rotateAdapter()
+      .then(() => { pagesProcessed = 0; rotating = false; drainQueue(step) })
+      .catch(console.error)
+    return
+  }
   while (queue.length > 0 && activeCount < concurrency) {
     const task = queue.shift()!
     activeCount++
-    processPage(task, step).finally(() => {
+    processPage(task, step).then(success => {
+      pagesProcessed++
+      if (!success) {
+        if (contextKilledCount > 0) contextKilledCount--
+        else needsRotation = true
+      }
       activeCount--
       drainQueue(step)
     })
@@ -98,6 +156,10 @@ async function main() {
     initScripts: [...(data.browserSettings?.initScripts ?? []), ...(stepSettings?.initScripts ?? [])],
   }
   concurrency = mergedSettings.concurrency ?? 3
+  pageDelayMin = mergedSettings.pageDelayMin ?? 0
+  pageDelayMax = mergedSettings.pageDelayMax ?? 0
+  maxPagesPerContext = mergedSettings.maxPagesPerContext ?? 0
+  savedSettings = mergedSettings
   adapter = createBrowserAdapter(mergedSettings.browser_type, mergedSettings)
   await adapter.launch()
   if (mergedSettings.initScripts?.length) {

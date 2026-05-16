@@ -1,52 +1,68 @@
 // client/src/components/JsonEditor.tsx
-import { useState } from 'react'
+import { useRef, useEffect } from 'react'
+import Editor, { type OnMount } from '@monaco-editor/react'
+import { useTheme } from '../hooks/useTheme'
 
 interface Props {
   value: string
   onChange: (value: string) => void
+  onBlur?: () => void
   placeholder?: string
   disabled?: boolean
+  rows?: number
 }
 
-export function JsonEditor({ value, onChange, placeholder, disabled }: Props) {
-  const [error, setError] = useState<string | null>(null)
+export function JsonEditor({ value, onChange, onBlur, disabled, rows = 5 }: Props) {
+  const { theme } = useTheme()
+  const monacoTheme = theme === 'dark' ? 'vs-dark' : 'light'
+  const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
+  const onBlurRef = useRef(onBlur)
+  useEffect(() => { onBlurRef.current = onBlur }, [onBlur])
+  const height = rows * 19 + 12
 
-  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    const v = e.target.value
-    onChange(v)
-    if (!v.trim()) {
-      setError(null)
-      return
-    }
-    try {
-      JSON.parse(v)
-      setError(null)
-    } catch {
-      setError('Invalid JSON')
-    }
+  function handleMount(editor: Parameters<OnMount>[0]) {
+    editorRef.current = editor
+    editor.onDidBlurEditorText(() => onBlurRef.current?.())
+  }
+
+  function handleFormat() {
+    editorRef.current?.getAction('editor.action.formatDocument')?.run()
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <textarea
+    <div className="relative rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <Editor
+        height={height}
+        language="json"
+        theme={monacoTheme}
         value={value}
-        onChange={handleChange}
-        disabled={disabled}
-        placeholder={placeholder}
-        rows={5}
-        spellCheck={false}
-        className={[
-          'w-full rounded-lg border px-3 py-2 font-mono text-xs resize-y',
-          'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100',
-          'placeholder-gray-400 dark:placeholder-gray-600',
-          error
-            ? 'border-red-400 dark:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-400'
-            : 'border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-emerald-400',
-          disabled ? 'opacity-50 cursor-not-allowed' : '',
-        ].join(' ')}
+        onChange={(v) => onChange(v ?? '')}
+        onMount={handleMount}
+        options={{
+          minimap: { enabled: false },
+          fontSize: 12,
+          lineNumbers: 'off',
+          glyphMargin: false,
+          folding: false,
+          lineDecorationsWidth: 4,
+          scrollBeyondLastLine: false,
+          wordWrap: 'on',
+          tabSize: 2,
+          readOnly: disabled,
+          overviewRulerLanes: 0,
+          renderLineHighlight: 'none',
+          scrollbar: { vertical: 'auto', horizontal: 'hidden' },
+        }}
       />
-      {error && (
-        <p className="text-xs text-red-500 dark:text-red-400">{error}</p>
+      {value.trim() && (
+        <button
+          type="button"
+          onClick={handleFormat}
+          disabled={disabled}
+          className="absolute top-1.5 right-3 z-10 text-xs px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          Format
+        </button>
       )}
     </div>
   )

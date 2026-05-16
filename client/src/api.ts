@@ -213,6 +213,7 @@ export async function deleteStep(parserName: string, stepName: string): Promise<
 export interface RunInfo {
   id: string
   parserName: string
+  browserType: string
   status: 'running' | 'stopped' | 'completed' | 'failed'
   startedAt: string
   stoppedAt: string | null

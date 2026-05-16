@@ -21,6 +21,7 @@ export function TaskDetailPage({ runId, taskId, onBack }: Props) {
   const [task, setTask] = useState<TaskRow | null>(null)
   const [taskResult, setTaskResult] = useState<Record<string, unknown>[] | null>(null)
   const [taskResultLoading, setTaskResultLoading] = useState(false)
+  const [failedHtml, setFailedHtml] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<'retry' | 'abort' | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -35,6 +36,11 @@ export function TaskDetailPage({ runId, taskId, onBack }: Props) {
         const r = await getTaskResult(runId, taskId).catch(() => ({ rows: [] }))
         setTaskResult(r.rows)
         setTaskResultLoading(false)
+      }
+      if (taskData.state === 'failed') {
+        const r = await getTaskResult(runId, taskId).catch(() => ({ rows: [] }))
+        const htmlRow = r.rows.find((row) => typeof row.__failedHtml === 'string')
+        setFailedHtml(htmlRow ? (htmlRow.__failedHtml as string) : null)
       }
     } catch (e) {
       setLoadError((e as Error).message)
@@ -148,6 +154,10 @@ export function TaskDetailPage({ runId, taskId, onBack }: Props) {
                 <p className="text-xs text-gray-500 font-medium mb-1 uppercase tracking-wider">Job</p>
                 <p className="text-gray-500 text-xs">{run?.parserName ?? '…'}</p>
               </div>
+              <div>
+                <p className="text-xs text-gray-500 font-medium mb-1 uppercase tracking-wider">Browser</p>
+                <p className="text-gray-800 dark:text-gray-200 text-xs font-mono">{run?.browserType ?? '…'}</p>
+              </div>
             </div>
 
             {task.error && (
@@ -156,6 +166,34 @@ export function TaskDetailPage({ runId, taskId, onBack }: Props) {
                 <pre className="text-xs text-red-500 bg-red-50 dark:bg-red-900/20 rounded p-3 whitespace-pre-wrap break-all">
                   {task.error}
                 </pre>
+              </div>
+            )}
+
+            {task.state === 'failed' && failedHtml !== null && (
+              <div>
+                <details>
+                  <summary className="text-xs text-gray-500 font-medium uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-300">
+                    Response HTML ({(failedHtml.length / 1024).toFixed(1)} KB)
+                  </summary>
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      onClick={() => navigator.clipboard.writeText(failedHtml)}
+                      className="text-xs text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-700"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <pre className="mt-1 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded p-3 whitespace-pre-wrap break-all max-h-96 overflow-y-auto">
+                    {failedHtml}
+                  </pre>
+                </details>
+              </div>
+            )}
+
+            {task.state === 'failed' && failedHtml === null && (
+              <div>
+                <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Response HTML</p>
+                <p className="text-xs text-gray-400 mt-1">Not captured — page may have crashed before content could be read</p>
               </div>
             )}
 

@@ -4,6 +4,7 @@ import Editor from '@monaco-editor/react'
 import { useParserEditor } from '../hooks/useParserEditor'
 import { StepDebugPanel } from './StepDebugPanel'
 import { ParserSettingsPanel } from './ParserSettingsPanel'
+import { JsonEditor } from './JsonEditor'
 import { createParser, type CreateParserInput } from '../api'
 import { useTheme } from '../hooks/useTheme'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -28,43 +29,126 @@ function StepSettingsBar({
   onSave: (settings: Record<string, unknown>) => void
 }) {
   const [json, setJson] = useState(
-    Object.keys(step.stepSettings).length ? JSON.stringify(step.stepSettings, null, 2) : '',
+    () => {
+      const { pageDelayMin: _a, pageDelayMax: _b, maxPagesPerContext: _c, ...rest } = step.stepSettings as Record<string, unknown>
+      return Object.keys(rest).length ? JSON.stringify(rest, null, 2) : ''
+    }
   )
-  const [error, setError] = useState(false)
 
-  function handleBlur() {
-    const s = json.trim()
-    if (!s) { setError(false); onSave({}); return }
-    try {
-      onSave(JSON.parse(s))
-      setError(false)
-    } catch {
-      setError(true)
+  function dedicated(): Record<string, unknown> {
+    const { pageDelayMin, pageDelayMax, maxPagesPerContext } = step.stepSettings as Record<string, unknown>
+    return {
+      ...(pageDelayMin != null && { pageDelayMin }),
+      ...(pageDelayMax != null && { pageDelayMax }),
+      ...(maxPagesPerContext != null && { maxPagesPerContext }),
     }
   }
 
+  function save(patch: Record<string, unknown>) {
+    const base: Record<string, unknown> = {}
+    const s = json.trim()
+    if (s) {
+      try { Object.assign(base, JSON.parse(s)) } catch { /* invalid json, skip */ }
+    }
+    onSave({ ...dedicated(), ...base, ...patch })
+  }
+
+  function handleBlur() {
+    const s = json.trim()
+    if (!s) { onSave(dedicated()); return }
+    try {
+      onSave({ ...dedicated(), ...JSON.parse(s) })
+    } catch {
+      // JsonEditor shows the inline error; skip the save
+    }
+  }
+
+  const inputClass =
+    'text-xs px-2 py-1.5 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 ' +
+    'text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-emerald-400 w-24'
+
+  const settings = step.stepSettings as Record<string, unknown>
+
   return (
     <div className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/60 px-4 py-2">
-      <label className="block text-xs text-gray-500 font-medium mb-1">
-        Step Settings{' '}
-        <span className="font-normal text-gray-400">(concurrency, timeout, userAgent, initScripts…)</span>
-      </label>
-      <textarea
-        value={json}
-        onChange={(e) => { setJson(e.target.value); setError(false) }}
-        onBlur={handleBlur}
-        rows={4}
-        spellCheck={false}
-        placeholder={'{\n  "concurrency": 3,\n  "timeout": 30000\n}'}
-        className={[
-          'w-full max-w-xl rounded border px-3 py-2 font-mono text-xs resize-y bg-white dark:bg-gray-900',
-          'text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600',
-          error
-            ? 'border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400'
-            : 'border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-emerald-400',
-        ].join(' ')}
-      />
-      {error && <p className="text-xs text-red-500 mt-1">Invalid JSON</p>}
+      <div className="flex flex-wrap gap-x-6 gap-y-2 items-start">
+
+        {/* Delay Min */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500 font-medium">
+            Delay Min <span className="font-normal text-gray-400">ms</span>
+          </label>
+          <input
+            type="number"
+            min={0}
+            step={500}
+            key={String(settings.pageDelayMin ?? '')}
+            defaultValue={settings.pageDelayMin != null ? Number(settings.pageDelayMin) : ''}
+            placeholder="0"
+            onBlur={(e) => {
+              const raw = e.target.value.trim()
+              save({ pageDelayMin: raw === '' ? undefined : parseInt(raw, 10) })
+            }}
+            className={inputClass}
+          />
+        </div>
+
+        {/* Delay Max */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500 font-medium">
+            Delay Max <span className="font-normal text-gray-400">ms</span>
+          </label>
+          <input
+            type="number"
+            min={0}
+            step={500}
+            key={String(settings.pageDelayMax ?? '')}
+            defaultValue={settings.pageDelayMax != null ? Number(settings.pageDelayMax) : ''}
+            placeholder="0"
+            onBlur={(e) => {
+              const raw = e.target.value.trim()
+              save({ pageDelayMax: raw === '' ? undefined : parseInt(raw, 10) })
+            }}
+            className={inputClass}
+          />
+        </div>
+
+        {/* Max Pages / Context */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500 font-medium">
+            Max Pages/Context <span className="font-normal text-gray-400">(0 = off)</span>
+          </label>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            key={String(settings.maxPagesPerContext ?? '')}
+            defaultValue={settings.maxPagesPerContext != null ? Number(settings.maxPagesPerContext) : ''}
+            placeholder="0"
+            onBlur={(e) => {
+              const raw = e.target.value.trim()
+              save({ maxPagesPerContext: raw === '' ? undefined : parseInt(raw, 10) })
+            }}
+            className={inputClass}
+          />
+        </div>
+
+        {/* Other settings JSON */}
+        <div className="flex flex-col gap-1 flex-1 min-w-48">
+          <label className="text-xs text-gray-500 font-medium">
+            Step Settings{' '}
+            <span className="font-normal text-gray-400">(concurrency, userAgent, initScripts…)</span>
+          </label>
+          <JsonEditor
+            value={json}
+            onChange={setJson}
+            onBlur={handleBlur}
+            rows={3}
+            placeholder={'{\n  "concurrency": 3\n}'}
+          />
+        </div>
+
+      </div>
     </div>
   )
 }
@@ -92,7 +176,6 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
   const [newParserDedup, setNewParserDedup] = useState(true)
   const [newParserQuota, setNewParserQuota] = useState('')
   const [newParserBrowserJson, setNewParserBrowserJson] = useState('')
-  const [newParserBrowserJsonError, setNewParserBrowserJsonError] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
@@ -118,10 +201,8 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
       if (newParserBrowserJson.trim()) {
         try {
           browserSettings = JSON.parse(newParserBrowserJson)
-          setNewParserBrowserJsonError(false)
         } catch {
-          setNewParserBrowserJsonError(true)
-          return
+          return // JsonEditor shows the inline error
         }
       }
       setCreating(true)
@@ -242,23 +323,11 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
                 Browser Settings (advanced)
               </summary>
               <div className="mt-2">
-                <textarea
+                <JsonEditor
                   value={newParserBrowserJson}
-                  onChange={(e) => { setNewParserBrowserJson(e.target.value); setNewParserBrowserJsonError(false) }}
-                  rows={5}
-                  spellCheck={false}
+                  onChange={setNewParserBrowserJson}
                   placeholder={'{\n  "userAgent": "Mozilla/5.0 ...",\n  "contextOptions": { "locale": "en-US" }\n}'}
-                  className={[
-                    'w-full rounded-lg border px-3 py-2 font-mono text-xs resize-y bg-white dark:bg-gray-900',
-                    'text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600',
-                    newParserBrowserJsonError
-                      ? 'border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400'
-                      : 'border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-emerald-400',
-                  ].join(' ')}
                 />
-                {newParserBrowserJsonError && (
-                  <p className="text-xs text-red-500 mt-1">Invalid JSON</p>
-                )}
               </div>
             </details>
           </motion.div>

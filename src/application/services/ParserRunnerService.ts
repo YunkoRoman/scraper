@@ -191,5 +191,8 @@ export class ParserRunnerService extends EventEmitter {
         : this.runPersistence.saveTaskResult(taskId, rows)
       save.catch(console.error)
     })
+    orchestrator.on('task_failed_html', (taskId: string, html: string) => {
+      this.runPersistence.saveTaskResult(taskId, [{ __failedHtml: html }]).catch(console.error)
+    })
   }
 }

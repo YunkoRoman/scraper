@@ -1,4 +1,4 @@
-import { parserRuns, runTasks, taskResults } from './schema.js'
+import { parserRuns, runTasks, taskResults, parsers } from './schema.js'
 import { eq, and, desc, sql, inArray } from 'drizzle-orm'
 import { BasePersistenceService } from './BasePersistenceService.js'
 import type { PageTask } from '../../domain/entities/PageTask.js'
@@ -7,6 +7,7 @@ import type { RunStats } from '../../domain/entities/ParserRun.js'
 export interface RunInfo {
   id: string
   parserName: string
+  browserType: string
   status: string
   startedAt: Date
   stoppedAt?: Date | null
@@ -45,14 +46,18 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
 
   async create(input: CreateRunInput): Promise<RunInfo> {
     await this.db.insert(parserRuns).values({ id: input.runId, parserName: input.parserName, status: 'running' })
-    return { id: input.runId, parserName: input.parserName, status: 'running', startedAt: new Date(), stats: null }
+    return { id: input.runId, parserName: input.parserName, browserType: 'playwright', status: 'running', startedAt: new Date(), stats: null }
   }
 
   async findById(id: string): Promise<RunInfo | null> {
-    const [row] = await this.db.select().from(parserRuns).where(eq(parserRuns.id, id))
+    const [row] = await this.db
+      .select({ run: parserRuns, browserType: parsers.browserType })
+      .from(parserRuns)
+      .leftJoin(parsers, eq(parsers.name, parserRuns.parserName))
+      .where(eq(parserRuns.id, id))
     if (!row) return null
-    const stats = await this._computeStats(row.id)
-    return { ...row, stats }
+    const stats = await this._computeStats(row.run.id)
+    return { ...row.run, browserType: row.browserType ?? 'playwright', stats }
   }
 
   async update(id: string, input: UpdateRunStatusInput): Promise<RunInfo> {
@@ -60,7 +65,7 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
       .set({ status: input.status, ...(input.stoppedAt !== undefined && { stoppedAt: input.stoppedAt }) })
       .where(eq(parserRuns.id, id))
     const [row] = await this.db.select().from(parserRuns).where(eq(parserRuns.id, id))
-    return { ...row, stats: null }
+    return { ...row, browserType: 'playwright', stats: null }
   }
 
   async delete(id: string): Promise<void> {
@@ -134,13 +139,16 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
   // ── Run queries ───────────────────────────────────────────────────────────
 
   async getLatestRunInfo(parserName: string): Promise<RunInfo | null> {
-    const [row] = await this.db.select().from(parserRuns)
+    const [row] = await this.db
+      .select({ run: parserRuns, browserType: parsers.browserType })
+      .from(parserRuns)
+      .leftJoin(parsers, eq(parsers.name, parserRuns.parserName))
       .where(eq(parserRuns.parserName, parserName))
       .orderBy(desc(parserRuns.startedAt))
       .limit(1)
     if (!row) return null
-    const stats = await this._computeStats(row.id)
-    return { ...row, stats }
+    const stats = await this._computeStats(row.run.id)
+    return { ...row.run, browserType: row.browserType ?? 'playwright', stats }
   }
 
   async getAllRuns(page: number, limit: number): Promise<{ runs: (RunInfo & { failedCount: number })[]; total: number }> {
@@ -169,10 +177,16 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
       statsByRun.get(row.runId)!.push(row)
     }
 
+    const parserNames = [...new Set(rows.map((r) => r.parserName))]
+    const parserRows = await this.db.select({ name: parsers.name, browserType: parsers.browserType })
+      .from(parsers)
+      .where(inArray(parsers.name, parserNames))
+    const browserTypeByParser = new Map(parserRows.map((p) => [p.name, p.browserType]))
+
     const runs = rows.map((r) => {
       const runStatRows = statsByRun.get(r.id) ?? []
       const stats = this._computeStatsFromRows(runStatRows)
-      return { ...r, stats, failedCount: stats?.failed ?? 0 }
+      return { ...r, browserType: browserTypeByParser.get(r.parserName) ?? 'playwright', stats, failedCount: stats?.failed ?? 0 }
     })
     return { runs, total: count }
   }

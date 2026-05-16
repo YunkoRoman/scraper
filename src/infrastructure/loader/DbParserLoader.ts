@@ -7,7 +7,7 @@ import { DEFAULT_RETRY_CONFIG } from '../../domain/value-objects/RetryConfig.js'
 import { db } from '../db/client.js'
 import { parsers, steps as stepsTable } from '../db/schema.js'
 import { eq } from 'drizzle-orm'
-import type { StepSettings } from '../../domain/value-objects/StepSettings.js'
+import type { BrowserType, StepSettings } from '../../domain/value-objects/StepSettings.js'
 import type { PageTask } from '../../domain/entities/PageTask.js'
 import type { TraverserResult } from '../../domain/value-objects/TraverserResult.js'
 
@@ -59,9 +59,10 @@ export class DbParserLoader implements IParserLoader {
       retryConfig: { ...DEFAULT_RETRY_CONFIG, ...(row.retryConfig as object) },
       deduplication: row.deduplication,
       concurrentQuota: row.concurrentQuota ?? undefined,
-      browserSettings: Object.keys(row.browserSettings as object).length
-        ? (row.browserSettings as ParserConfig['browserSettings'])
-        : undefined,
+      browserSettings: {
+        browser_type: row.browserType as BrowserType,
+        ...(row.browserSettings as ParserConfig['browserSettings']),
+      },
     }
   }
 }

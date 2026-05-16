@@ -31,6 +31,7 @@ export class ParserOrchestrator extends EventEmitter {
   private resolveCompletion!: () => void
   private globalActive = 0
   private dispatchQueue: string[] = []
+  private taskHtml = new Map<string, string>()
 
   constructor(
     private readonly config: ParserConfig,
@@ -239,6 +240,7 @@ export class ParserOrchestrator extends EventEmitter {
       }
       case 'PAGE_FAILED': {
         this.globalActive--
+        if (msg.html) this.taskHtml.set(msg.taskId, msg.html)
         const task = this.run.getTask(msg.taskId)
         if (!task || isTerminal(task.state)) {
           this.flushDispatchQueue()
@@ -250,6 +252,11 @@ export class ParserOrchestrator extends EventEmitter {
           this.dispatchTask(msg.taskId)
         } else {
           this.run.markFailed(msg.taskId, msg.error)
+          const html = this.taskHtml.get(msg.taskId)
+          if (html) {
+            this.emit('task_failed_html', msg.taskId, html)
+            this.taskHtml.delete(msg.taskId)
+          }
           this.emit('task_done', this.run.getTask(msg.taskId)!)
           this.emit('stats', this.run.getStats())
           this.checkCompletion()
