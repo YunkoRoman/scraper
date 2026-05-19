@@ -159,7 +159,12 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
   router.get('/:name/files/:file', (req, res) => {
     const { name }: ParserRow = res.locals.parser
     const { file } = req.params
-    const filePath = resolve(outputDir, name, file)
+    if (!file.endsWith('.csv') || file.includes('/') || file.includes('..')) {
+      res.status(400).json({ error: 'Invalid file name' }); return
+    }
+    const safeDir = resolve(outputDir, name)
+    const filePath = resolve(safeDir, file)
+    if (!filePath.startsWith(safeDir + '/')) { res.status(400).json({ error: 'Invalid file name' }); return }
     if (!existsSync(filePath)) { res.status(404).json({ error: 'File not found' }); return }
     res.setHeader('Content-Disposition', `attachment; filename="${file}"`)
     createReadStream(filePath).pipe(res)

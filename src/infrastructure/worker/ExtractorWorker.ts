@@ -185,7 +185,6 @@ async function main() {
       ...(stepSettings?.initScripts ?? []),
     ],
   };
-  console.log("mergedSettings: ", mergedSettings)
   concurrency = mergedSettings.concurrency ?? 3;
   pageDelayMin = mergedSettings.pageDelayMin ?? 0;
   pageDelayMax = mergedSettings.pageDelayMax ?? 0;

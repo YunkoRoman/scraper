@@ -25,9 +25,13 @@ runner.on('stopped',     (name: string)                  => broadcast(name, { ty
 runner.on('postprocess', (name: string, filePath: string) => broadcast(name, { type: 'postprocess', filePath }))
 
 // ── App ───────────────────────────────────────────────────────────────────────
+const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5173').split(',').map((s) => s.trim())
 const app = express()
-app.use(cors())
-app.use(express.json())
+app.use(cors({ origin: (origin, cb) => {
+  if (!origin || allowedOrigins.includes(origin)) cb(null, true)
+  else cb(new Error(`CORS: origin ${origin} not allowed`))
+}}))
+app.use(express.json({ limit: '1mb' }))
 app.use('/api/parsers', createParsersRouter({ runner, runPersistence, parserService, dbLoader, outputDir }))
 app.use('/api/jobs',    createJobsRouter({ runner, runPersistence }))
 

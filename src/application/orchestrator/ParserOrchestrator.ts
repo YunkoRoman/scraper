@@ -76,9 +76,8 @@ export class ParserOrchestrator extends EventEmitter {
     ) {
       throw new Error(`Task "${taskId}" cannot be aborted (state: ${task.state})`)
     }
-    if (task.state === PageState.InProgress) {
-      this.globalActive--
-    }
+    // Do NOT touch globalActive here. If the task is in-progress the worker will
+    // still respond with PAGE_SUCCESS/PAGE_FAILED, which does the single decrement.
     this.run.markAborted(taskId)
   }
 
@@ -110,6 +109,9 @@ export class ParserOrchestrator extends EventEmitter {
       }
     } else {
       // Fresh start
+      if (!/^https?:\/\//i.test(this.config.entryUrl)) {
+        throw new Error(`Invalid entryUrl: must start with http:// or https://`)
+      }
       const initialUrls = this.deduplicator.filter([this.config.entryUrl])
       const entryStepType = this.config.steps.get(this.config.entryStep)?.type ?? 'traverser'
       for (const url of initialUrls) {
@@ -184,16 +186,31 @@ export class ParserOrchestrator extends EventEmitter {
 
     const worker = new Worker(entryFile, { workerData: wData })
     worker.on('message', (msg: WorkerOutMessage) => this.handleWorkerMessage(msg))
-    worker.on('error', (err) => this.emit('error', err))
+    worker.on('error', (err) => {
+      this.emit('error', err)
+      // Mark all in-progress tasks for this step as failed so the run can complete.
+      for (const task of this.run.allTasks()) {
+        if (String(task.stepName) === String(step.name) && task.state === PageState.InProgress) {
+          this.globalActive--
+          this.run.markFailed(task.id, `Worker crashed: ${err.message}`)
+          this.emit('task_done', this.run.getTask(task.id)!)
+        }
+      }
+      this.emit('stats', this.run.getStats())
+      this.flushDispatchQueue()
+      this.checkCompletion()
+    })
     this.workers.set(step.name, worker)
   }
 
   private handleWorkerMessage(msg: WorkerOutMessage): void {
-    if (this.stopped) return
     switch (msg.type) {
       case 'LINKS_DISCOVERED': {
-        const newLinks = new Set(this.deduplicator.filter(msg.items.map((i) => i.link)))
-        const newItems = msg.items.filter((i) => newLinks.has(i.link))
+        // Don't create new tasks after stop.
+        if (this.stopped) break
+        const validItems = msg.items.filter((i) => /^https?:\/\//i.test(i.link))
+        const newLinks = new Set(this.deduplicator.filter(validItems.map((i) => i.link)))
+        const newItems = validItems.filter((i) => newLinks.has(i.link))
         for (const item of newItems) {
           const stepName = item.page_type as StepName
           const stepType = this.config.steps.get(stepName)?.type ?? 'traverser'
@@ -279,7 +296,7 @@ export class ParserOrchestrator extends EventEmitter {
 
   private _sendToWorker(taskId: string): void {
     const task = this.run.getTask(taskId)
-    if (!task) return
+    if (!task || isTerminal(task.state)) return
     const worker = this.workers.get(task.stepName)
     if (!worker) {
       this.run.markFailed(taskId, `No worker for step "${task.stepName}"`)
