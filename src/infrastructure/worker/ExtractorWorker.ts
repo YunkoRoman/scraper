@@ -6,7 +6,7 @@ import type {
   WorkerData,
 } from "./messages.js";
 import {pipeConsole} from "./pipeConsole.js";
-import {buildContextOptions} from "./buildContextOptions.js";
+import {mergeWorkerSettings} from "./mergeWorkerSettings.js";
 import {createBrowserAdapter} from "../browser/BrowserAdapter.js";
 import type {BrowserAdapter} from "../browser/BrowserAdapter.js";
 import type {PageTask} from "../../domain/entities/PageTask.js";
@@ -176,15 +176,7 @@ async function main() {
     stepSettings = data.stepSettings;
   }
 
-  const mergedSettings: StepSettings = {
-    ...data.browserSettings,
-    ...stepSettings,
-    contextOptions: buildContextOptions(data.browserSettings, stepSettings),
-    initScripts: [
-      ...(data.browserSettings?.initScripts ?? []),
-      ...(stepSettings?.initScripts ?? []),
-    ],
-  };
+  const mergedSettings: StepSettings = mergeWorkerSettings(data.browserSettings, stepSettings);
   concurrency = mergedSettings.concurrency ?? 3;
   pageDelayMin = mergedSettings.pageDelayMin ?? 0;
   pageDelayMax = mergedSettings.pageDelayMax ?? 0;

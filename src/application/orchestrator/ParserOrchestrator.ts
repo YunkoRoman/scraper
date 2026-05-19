@@ -45,7 +45,7 @@ export class ParserOrchestrator extends EventEmitter {
       for (const t of snapshotTasks) this.run.restoreTask(t)
     }
     this.deduplicator = new LinkDeduplicator(config.deduplication)
-    this.outputDir = resolve(outputBaseDir, config.name)
+    this.outputDir = resolve(outputBaseDir, config.name, this.run.id)
   }
 
   get runId(): string {

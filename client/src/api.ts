@@ -18,6 +18,7 @@ export interface RunStats {
 
 export interface OutputFile {
   name: string
+  runId: string
   size: number
   mtime: string
 }
@@ -57,8 +58,8 @@ export async function listFiles(name: string): Promise<OutputFile[]> {
   return data.files as OutputFile[]
 }
 
-export function downloadFile(parserName: string, fileName: string): void {
-  window.open(`${API_BASE}/api/parsers/${parserName}/files/${fileName}`, '_blank')
+export function downloadFile(parserName: string, runId: string, fileName: string): void {
+  window.open(`${API_BASE}/api/parsers/${parserName}/files/${encodeURIComponent(runId)}/${encodeURIComponent(fileName)}`, '_blank')
 }
 
 export interface StepInfo {

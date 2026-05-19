@@ -117,8 +117,13 @@ Review surfaced issues in four areas:
 - **Bulk upsert transaction**: `_bulkUpsertTasks` now wraps batched inserts (500/batch) in a single DB transaction instead of N sequential awaits. Consistent on partial failure; much faster for large task counts.
 - **Fire-and-forget error surfacing**: `.catch(console.error)` replaced with contextual error logs including task ID and operation name.
 
-### Remaining (not yet implemented)
+### Group 4 — Design (implemented)
 
-- Group 4: settings-merge extraction to domain service, stats shape unification, CSV port injection.
-- CSV overwrite on resume (per-run filenames).
+- **Settings-merge extracted**: `mergeWorkerSettings(browserSettings, stepSettings)` utility in `infrastructure/worker/`. Identical logic removed from both `ExtractorWorker` and `TraverserWorker`. Single place to change merge behavior.
+- **CSV per-run subdirs**: `outputDir` now `output/<parserName>/<runId>/`. Each run gets isolated files — resume and retry-failed no longer overwrite prior run's CSV. Files list endpoint now reads one level of subdirs and returns `{ name, runId, size, mtime }` per file. Download route is `/:name/files/:runId/:file`. Client `downloadFile()` and `OutputFile` type updated.
+
+### Remaining (not implemented)
+
+- Stats computation duplicated in `ParserRun.getStats()` (in-memory) and `_computeStatsFromRows` (SQL) — acceptable since they operate on different data representations and the output type enforces structural agreement.
+- CSV port injection (inject `OutputWriter` interface into orchestrator) — deferred; orchestrator CSV coupling is acceptable for now.
 - Pre-existing test failure: `ParserRun > transitions task to retry and increments attempts` — attempts only incremented in `markInProgress`, not `markRetry`; test calls `markRetry` directly. Pre-exists this work.

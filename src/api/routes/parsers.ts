@@ -138,16 +138,27 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
 
   router.get('/:name/files', async (_req, res) => {
     const { name }: ParserRow = res.locals.parser
-    const dir = resolve(outputDir, name)
+    const parserDir = resolve(outputDir, name)
     try {
-      const entries = await readdir(dir)
-      const files = await Promise.all(
-        entries
-          .filter((f) => f.endsWith('.csv'))
-          .map(async (f) => {
-            const s = await stat(resolve(dir, f))
-            return { name: f, size: s.size, mtime: s.mtime.toISOString() }
-          }),
+      const subdirs = await readdir(parserDir)
+      const files: { name: string; runId: string; size: number; mtime: string }[] = []
+      await Promise.all(
+        subdirs.map(async (sub) => {
+          const subPath = resolve(parserDir, sub)
+          try {
+            const subStat = await stat(subPath)
+            if (!subStat.isDirectory()) return
+            const entries = await readdir(subPath)
+            await Promise.all(
+              entries
+                .filter((f) => f.endsWith('.csv'))
+                .map(async (f) => {
+                  const s = await stat(resolve(subPath, f))
+                  files.push({ name: f, runId: sub, size: s.size, mtime: s.mtime.toISOString() })
+                }),
+            )
+          } catch { /* skip unreadable subdirs */ }
+        }),
       )
       files.sort((a, b) => new Date(b.mtime).getTime() - new Date(a.mtime).getTime())
       res.json({ files })
@@ -156,15 +167,15 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
     }
   })
 
-  router.get('/:name/files/:file', (req, res) => {
+  router.get('/:name/files/:runId/:file', (req, res) => {
     const { name }: ParserRow = res.locals.parser
-    const { file } = req.params
-    if (!file.endsWith('.csv') || file.includes('/') || file.includes('..')) {
-      res.status(400).json({ error: 'Invalid file name' }); return
+    const { runId, file } = req.params
+    if (!file.endsWith('.csv') || file.includes('/') || file.includes('..') || runId.includes('/') || runId.includes('..')) {
+      res.status(400).json({ error: 'Invalid path' }); return
     }
     const safeDir = resolve(outputDir, name)
-    const filePath = resolve(safeDir, file)
-    if (!filePath.startsWith(safeDir + '/')) { res.status(400).json({ error: 'Invalid file name' }); return }
+    const filePath = resolve(safeDir, runId, file)
+    if (!filePath.startsWith(safeDir + '/')) { res.status(400).json({ error: 'Invalid path' }); return }
     if (!existsSync(filePath)) { res.status(404).json({ error: 'File not found' }); return }
     res.setHeader('Content-Disposition', `attachment; filename="${file}"`)
     createReadStream(filePath).pipe(res)

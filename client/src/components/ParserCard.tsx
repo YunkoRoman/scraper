@@ -153,7 +153,7 @@ export function ParserCard({ name, onEdit, onViewJob }: Props) {
                 <motion.button
                   key={f.name}
                   variants={staggerItemVariants}
-                  onClick={() => downloadFile(name, f.name)}
+                  onClick={() => downloadFile(name, f.runId, f.name)}
                   className="w-full flex items-center justify-between text-xs bg-gray-50 dark:bg-gray-900/60 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 transition-colors group"
                 >
                   <span className="text-gray-700 dark:text-gray-300 font-mono truncate">{f.name}</span>
