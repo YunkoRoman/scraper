@@ -254,7 +254,7 @@ export async function getJobTasks(
   return apiRequest(`/api/jobs/${encodeURIComponent(runId)}/tasks?${params}`)
 }
 
-export async function getTaskResult(runId: string, taskId: string): Promise<{ rows: Record<string, unknown>[] }> {
+export async function getTaskResult(runId: string, taskId: string): Promise<{ rows: Record<string, unknown>[]; html: string | null }> {
   return apiRequest(`/api/jobs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/result`)
 }
 

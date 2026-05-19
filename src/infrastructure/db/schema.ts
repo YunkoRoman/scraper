@@ -64,4 +64,5 @@ export const runTasks = pgTable('run_tasks', {
 export const taskResults = pgTable('task_results', {
   taskId: uuid('task_id').primaryKey().references(() => runTasks.id, { onDelete: 'cascade' }),
   rows:   jsonb('rows').notNull().default([]),
+  html:   text('html'),
 })

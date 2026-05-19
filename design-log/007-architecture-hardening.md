@@ -111,9 +111,14 @@ Review surfaced issues in four areas:
 - **Worker crash recovery**: `worker.on('error')` now marks all that worker's in-progress tasks as failed, decrements `globalActive`, emits stats, and calls `checkCompletion` so the run can resolve.
 - **Debug log removed**: `console.log("mergedSettings:", ...)` removed from `ExtractorWorker`.
 
+### Group 3 — Persistence integrity (implemented)
+
+- **`task_html` column**: migration `0003_task_html.sql` adds `html TEXT` to `task_results`. Schema updated. `saveTaskHtml(taskId, html)` added to `RunPersistenceService`. `getTaskResult` return type changed to `{ rows, html }`. `__failedHtml` sentinel pattern eliminated from `ParserRunnerService`, `jobs.ts` route, and `TaskDetailPage`.
+- **Bulk upsert transaction**: `_bulkUpsertTasks` now wraps batched inserts (500/batch) in a single DB transaction instead of N sequential awaits. Consistent on partial failure; much faster for large task counts.
+- **Fire-and-forget error surfacing**: `.catch(console.error)` replaced with contextual error logs including task ID and operation name.
+
 ### Remaining (not yet implemented)
 
-- Group 3: bulk upsert transactions, `task_html` column (separate from `rows`), fire-and-forget persistence surfacing.
-- Group 4: settings-merge extraction, stats shape unification, CSV port injection.
+- Group 4: settings-merge extraction to domain service, stats shape unification, CSV port injection.
 - CSV overwrite on resume (per-run filenames).
 - Pre-existing test failure: `ParserRun > transitions task to retry and increments attempts` — attempts only incremented in `markInProgress`, not `markRetry`; test calls `markRetry` directly. Pre-exists this work.

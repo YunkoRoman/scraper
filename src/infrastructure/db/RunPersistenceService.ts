@@ -123,11 +123,17 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
       .onConflictDoUpdate({ target: taskResults.taskId, set: { rows: sql`excluded.rows` } })
   }
 
-  async getTaskResult(runId: string, taskId: string): Promise<Record<string, unknown>[] | null> {
+  async saveTaskHtml(taskId: string, html: string): Promise<void> {
+    await this.db.insert(taskResults).values({ taskId, rows: [], html })
+      .onConflictDoUpdate({ target: taskResults.taskId, set: { html: sql`excluded.html` } })
+  }
+
+  async getTaskResult(runId: string, taskId: string): Promise<{ rows: Record<string, unknown>[]; html: string | null } | null> {
     const task = await this.getTask(runId, taskId)
     if (!task) return null
     const [row] = await this.db.select().from(taskResults).where(eq(taskResults.taskId, taskId))
-    return row ? (row.rows as Record<string, unknown>[]) : null
+    if (!row) return null
+    return { rows: row.rows as Record<string, unknown>[], html: row.html ?? null }
   }
 
   async getTask(runId: string, taskId: string): Promise<StoredTask | null> {
@@ -229,7 +235,35 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
 
   private async _bulkUpsertTasks(runId: string, tasks: PageTask[]): Promise<void> {
     if (tasks.length === 0) return
-    for (const task of tasks) await this.upsertTask(runId, task)
+    const BATCH = 500
+    const now = new Date()
+    await this.db.transaction(async (tx) => {
+      for (let i = 0; i < tasks.length; i += BATCH) {
+        const chunk = tasks.slice(i, i + BATCH)
+        await tx.insert(runTasks).values(chunk.map((t) => ({
+          id:           t.id,
+          runId,
+          url:          t.url,
+          stepName:     String(t.stepName),
+          stepType:     t.stepType,
+          state:        t.state,
+          attempts:     t.attempts,
+          maxAttempts:  t.maxAttempts,
+          error:        t.error ?? null,
+          parentTaskId: t.parentTaskId ?? null,
+          parent_data:  t.parent_data ?? null,
+          updatedAt:    now,
+        }))).onConflictDoUpdate({
+          target: runTasks.id,
+          set: {
+            state:     sql`excluded.state`,
+            attempts:  sql`excluded.attempts`,
+            error:     sql`excluded.error`,
+            updatedAt: sql`excluded.updated_at`,
+          },
+        })
+      }
+    })
   }
 
   private async _computeStats(runId: string): Promise<RunStats | null> {

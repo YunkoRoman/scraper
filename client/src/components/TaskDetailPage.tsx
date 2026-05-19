@@ -33,14 +33,13 @@ export function TaskDetailPage({ runId, taskId, onBack }: Props) {
       setTask(taskData)
       if (taskData.stepType === 'extractor' && taskData.state === 'success') {
         setTaskResultLoading(true)
-        const r = await getTaskResult(runId, taskId).catch(() => ({ rows: [] }))
+        const r = await getTaskResult(runId, taskId).catch(() => ({ rows: [], html: null }))
         setTaskResult(r.rows)
         setTaskResultLoading(false)
       }
       if (taskData.state === 'failed') {
-        const r = await getTaskResult(runId, taskId).catch(() => ({ rows: [] }))
-        const htmlRow = r.rows.find((row) => typeof row.__failedHtml === 'string')
-        setFailedHtml(htmlRow ? (htmlRow.__failedHtml as string) : null)
+        const r = await getTaskResult(runId, taskId).catch(() => ({ rows: [], html: null }))
+        setFailedHtml(r.html)
       }
     } catch (e) {
       setLoadError((e as Error).message)

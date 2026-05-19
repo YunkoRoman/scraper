@@ -1,0 +1,1 @@
+ALTER TABLE task_results ADD COLUMN IF NOT EXISTS html TEXT;

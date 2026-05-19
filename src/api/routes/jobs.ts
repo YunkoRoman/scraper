@@ -94,8 +94,8 @@ export function createJobsRouter({ runner, runPersistence }: Deps) {
 
   router.get('/:runId/tasks/:taskId/result', async (req, res) => {
     const { runId, taskId } = req.params
-    const rows = await runPersistence.getTaskResult(runId, taskId)
-    res.json({ rows: rows ?? [] })
+    const result = await runPersistence.getTaskResult(runId, taskId)
+    res.json({ rows: result?.rows ?? [], html: result?.html ?? null })
   })
 
   router.post('/:runId/tasks/:taskId/retry', (req, res) => {

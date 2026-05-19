@@ -182,17 +182,23 @@ export class ParserRunnerService extends EventEmitter {
 
   private _wireTaskEvents(orchestrator: ParserOrchestrator): void {
     orchestrator.on('task_done', (task: PageTask) => {
-      this.runPersistence.upsertTask(orchestrator.runId, task).catch(console.error)
+      this.runPersistence.upsertTask(orchestrator.runId, task).catch((err) => {
+        console.error(`[persistence] upsertTask failed for task ${task.id}:`, err)
+      })
       this.emit('task_done', orchestrator.runId, task)
     })
     orchestrator.on('data_extracted', ({ taskId, rows, task }: { taskId: string; rows: Record<string, unknown>[]; task: PageTask | undefined }) => {
       const save = task
         ? this.runPersistence.upsertTask(orchestrator.runId, task).then(() => this.runPersistence.saveTaskResult(taskId, rows))
         : this.runPersistence.saveTaskResult(taskId, rows)
-      save.catch(console.error)
+      save.catch((err) => {
+        console.error(`[persistence] saveTaskResult failed for task ${taskId}:`, err)
+      })
     })
     orchestrator.on('task_failed_html', (taskId: string, html: string) => {
-      this.runPersistence.saveTaskResult(taskId, [{ __failedHtml: html }]).catch(console.error)
+      this.runPersistence.saveTaskHtml(taskId, html).catch((err) => {
+        console.error(`[persistence] saveTaskHtml failed for task ${taskId}:`, err)
+      })
     })
   }
 }
