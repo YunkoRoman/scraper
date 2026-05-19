@@ -3,16 +3,16 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx src/cli/index.ts",
-    "api": "tsx src/api/server.ts",
-    "api:dev": "tsx watch src/api/server.ts",
+    "dev": "tsx --env-file=.env src/cli/index.ts",
+    "api": "tsx --env-file=.env src/api/server.ts",
+    "api:dev": "tsx watch --env-file=.env src/api/server.ts",
     "client": "cd client && npm run dev",
     "start": "concurrently \"npm run api:dev\" \"npm run client\"",
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:migrate": "tsx src/infrastructure/db/migrate.ts",
-    "db:seed": "tsx src/scripts/seedParsers.ts"
+    "db:migrate": "tsx --env-file=.env src/infrastructure/db/migrate.ts",
+    "db:seed": "tsx --env-file=.env src/scripts/seedParsers.ts"
   },
   "dependencies": {
     "commander": "^12.1.0",
