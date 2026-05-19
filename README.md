@@ -1,6 +1,13 @@
 # Scraper Platform
 
-Universal web scraping platform. Parsers are multi-step pipelines (traversers → extractors) running in Worker Threads, with a React UI for building, running, and monitoring jobs.
+A developer-focused web scraping platform built with TypeScript and Playwright. Define multi-step scraping pipelines in code — traversers discover links, extractors pull structured data — then run and monitor them from a React UI or the CLI.
+
+**Key features:**
+- **Visual editor** — build and edit parsers with a Monaco code editor, live debug runner, and real-time job monitoring
+- **Concurrent workers** — each step runs in its own Node.js Worker Thread with configurable concurrency, delays, and browser context rotation
+- **Bot evasion** — stealth adapters (Playwright + Puppeteer), init scripts, proxy support, randomised delays
+- **Persistent runs** — stop and resume jobs; retry failed tasks; full run history in PostgreSQL
+- **CSV output** — per-run files with post-processing (column normalisation, byte-offset index)
 
 ## Setup
 
