@@ -6,7 +6,7 @@ import { StepDebugPanel } from './StepDebugPanel'
 import { ParserSettingsPanel } from './ParserSettingsPanel'
 import { JsonEditor } from './JsonEditor'
 import { createParser, type CreateParserInput } from '../api'
-import { useTheme } from '../hooks/useTheme'
+import { useSettings } from '../hooks/useSettings'
 import { AnimatePresence, motion } from 'framer-motion'
 import { SpringButton } from './motion/SpringButton'
 import { staggerItemVariants } from './motion/StaggerList'
@@ -160,8 +160,8 @@ interface Props {
 }
 
 export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSelect }: Props) {
-  const { theme } = useTheme()
-  const monacoTheme = theme === 'dark' ? 'vs-dark' : 'light'
+  const { settings } = useSettings()
+  const monacoTheme = settings.theme === 'dark' || (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'vs-dark' : 'light'
 
   const {
     parser, steps, selectedStep, selectedStepName, code,

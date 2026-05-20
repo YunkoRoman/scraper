@@ -1,7 +1,7 @@
 // client/src/components/JsonEditor.tsx
 import { useRef, useEffect } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
-import { useTheme } from '../hooks/useTheme'
+import { useSettings } from '../hooks/useSettings'
 
 interface Props {
   value: string
@@ -13,8 +13,8 @@ interface Props {
 }
 
 export function JsonEditor({ value, onChange, onBlur, disabled, rows = 5 }: Props) {
-  const { theme } = useTheme()
-  const monacoTheme = theme === 'dark' ? 'vs-dark' : 'light'
+  const { settings } = useSettings()
+  const monacoTheme = settings.theme === 'dark' || (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'vs-dark' : 'light'
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
   const onBlurRef = useRef(onBlur)
   useEffect(() => { onBlurRef.current = onBlur }, [onBlur])

@@ -23,12 +23,42 @@ export interface OutputFile {
   mtime: string
 }
 
+export interface ParserSummary {
+  name: string
+  status: 'idle' | 'running' | 'stopped'
+  successRate: number | null
+  lastRunDate: string | null
+  lastRunId: string | null
+}
+
+export interface ListParsersSummaryParams {
+  page?: number
+  limit?: number
+  search?: string
+  status?: 'all' | 'idle' | 'running' | 'stopped'
+  sort?: 'name' | 'successRate' | 'lastRunDate'
+  dir?: 'asc' | 'desc'
+}
+
 export const API_BASE = 'http://localhost:3001'
 
 export async function listParsers(): Promise<string[]> {
   const res = await fetch(`${API_BASE}/api/parsers`)
   const data = await res.json()
   return data.parsers as string[]
+}
+
+export async function listParsersSummary(
+  params: ListParsersSummaryParams = {},
+): Promise<{ parsers: ParserSummary[]; total: number }> {
+  const q = new URLSearchParams()
+  if (params.page)   q.set('page',   String(params.page))
+  if (params.limit)  q.set('limit',  String(params.limit))
+  if (params.search) q.set('search', params.search)
+  if (params.status) q.set('status', params.status)
+  if (params.sort)   q.set('sort',   params.sort)
+  if (params.dir)    q.set('dir',    params.dir)
+  return apiRequest(`/api/parsers?${q}`)
 }
 
 export async function startParser(name: string): Promise<void> {
@@ -81,6 +111,16 @@ export async function listSteps(parserName: string): Promise<StepInfo[]> {
   }
   const data = await res.json()
   return data.steps as StepInfo[]
+}
+
+export interface DashboardPerformanceDay {
+  date: string
+  successful: number
+  failed: number
+}
+
+export async function getDashboardPerformance(): Promise<{ days: DashboardPerformanceDay[] }> {
+  return apiRequest('/api/dashboard/performance')
 }
 
 export interface ParserRow {
@@ -222,6 +262,10 @@ export interface RunInfo {
   isRunning?: boolean
 }
 
+export interface ActiveRun extends RunInfo {
+  elapsed: number
+}
+
 export interface TaskRow {
   id: string
   runId: string
@@ -236,8 +280,14 @@ export interface TaskRow {
   parent_data?: Record<string, unknown> | null
 }
 
-export async function listJobs(page = 1, limit = 50): Promise<{ runs: RunInfo[]; total: number }> {
-  return apiRequest(`/api/jobs?page=${page}&limit=${limit}`)
+export async function listJobs(
+  page = 1,
+  limit = 50,
+  status?: string,
+): Promise<{ runs: (RunInfo & { elapsed?: number })[]; total: number }> {
+  const q = new URLSearchParams({ page: String(page), limit: String(limit) })
+  if (status) q.set('status', status)
+  return apiRequest(`/api/jobs?${q}`)
 }
 
 export async function getJob(runId: string): Promise<RunInfo> {

@@ -34,12 +34,48 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
 
   // ── Parser CRUD ─────────────────────────────────────────────────────────────
 
-  router.get('/', async (_req, res) => {
-    try {
-      res.json({ parsers: await parserService.listParserNames() })
-    } catch {
-      res.json({ parsers: [] })
-    }
+  router.get('/', async (req, res) => {
+    const page   = Math.max(1,   parseInt(String(req.query.page   ?? '1'),  10) || 1)
+    const limit  = Math.max(1, Math.min(200, parseInt(String(req.query.limit  ?? '10'), 10) || 10))
+    const search = String(req.query.search ?? '')
+    const status = String(req.query.status ?? 'all')
+    const sort   = (['name', 'successRate', 'lastRunDate'] as const)
+      .includes(req.query.sort as 'name') ? req.query.sort as 'name' | 'successRate' | 'lastRunDate' : 'name'
+    const dir    = req.query.dir === 'desc' ? 'desc' : 'asc'
+
+    const raw = await runPersistence.listParsersWithLatestRun(search)
+
+    // Enrich status from in-memory runner (authoritative for running state)
+    const enriched = raw.map((p) => ({
+      ...p,
+      status: (runner.isRunning(p.name) ? 'running' : p.dbStatus) as 'running' | 'stopped' | 'idle',
+    }))
+
+    // Filter by status
+    const filtered = status === 'all'
+      ? enriched
+      : enriched.filter((p) => p.status === status)
+
+    // Sort
+    const sorted = [...filtered].sort((a, b) => {
+      let cmp = 0
+      if (sort === 'name') {
+        cmp = a.name.localeCompare(b.name)
+      } else if (sort === 'successRate') {
+        cmp = (a.successRate ?? -1) - (b.successRate ?? -1)
+      } else if (sort === 'lastRunDate') {
+        cmp = (a.lastRunDate ?? '').localeCompare(b.lastRunDate ?? '')
+      }
+      return dir === 'asc' ? cmp : -cmp
+    })
+
+    const total = sorted.length
+    const page_items = sorted.slice((page - 1) * limit, page * limit)
+
+    res.json({
+      parsers: page_items.map(({ dbStatus: _db, ...rest }) => rest),
+      total,
+    })
   })
 
   router.post('/', async (req, res) => {
