@@ -25,9 +25,12 @@ interface Deps {
 export function createParsersRouter({ runner, runPersistence, parserService, dbLoader, outputDir }: Deps) {
   const router = express.Router()
 
-  router.param('name', async (_req, res, next, name: string) => {
-    const parser = await parserService.getParserByName(name)
-    if (!parser) { res.status(404).json({ error: `Parser "${name}" not found` }); return }
+  router.param('id', async (_req, res, next, id: string) => {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      res.status(404).json({ error: 'Parser not found' }); return
+    }
+    const parser = await parserService.findById(id)
+    if (!parser) { res.status(404).json({ error: 'Parser not found' }); return }
     res.locals.parser = parser
     next()
   })
@@ -36,7 +39,7 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
 
   router.get('/', async (req, res) => {
     const page   = Math.max(1,   parseInt(String(req.query.page   ?? '1'),  10) || 1)
-    const limit  = Math.max(1, Math.min(200, parseInt(String(req.query.limit  ?? '10'), 10) || 10))
+    const limit  = Math.max(1, Math.min(500, parseInt(String(req.query.limit  ?? '10'), 10) || 10))
     const search = String(req.query.search ?? '')
     const status = String(req.query.status ?? 'all')
     const sort   = (['name', 'successRate', 'lastRunDate'] as const)
@@ -103,34 +106,34 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
     }
   })
 
-  router.get('/:name', async (_req, res) => {
+  router.get('/:id', async (_req, res) => {
     const { id, name }: ParserRow = res.locals.parser
     const result = await parserService.getParserWithSteps(name)
     res.json(result ?? { parser: res.locals.parser, steps: await parserService.listSteps(id) })
   })
 
-  router.put('/:name', async (req, res) => {
+  router.put('/:id', async (req, res) => {
     const { id }: ParserRow = res.locals.parser
     const { entryUrl, entryStep, browserType, browserSettings, retryConfig, deduplication, concurrentQuota } = req.body
     const parser = await parserService.update(id, { entryUrl, entryStep, browserType, browserSettings, retryConfig, deduplication, concurrentQuota })
     res.json({ parser })
   })
 
-  router.delete('/:name', async (_req, res) => {
+  router.delete('/:id', async (_req, res) => {
     await parserService.delete((res.locals.parser as ParserRow).id)
     res.json({ ok: true })
   })
 
   // ── Run control ──────────────────────────────────────────────────────────────
 
-  router.post('/:name/start', (_req, res) => {
+  router.post('/:id/start', (_req, res) => {
     const { name }: ParserRow = res.locals.parser
     if (runner.isRunning(name)) { res.status(409).json({ error: 'Already running' }); return }
     runner.run(name).catch((err: Error) => broadcast(name, { type: 'error', message: err.message }))
     res.json({ ok: true })
   })
 
-  router.post('/:name/stop', async (_req, res) => {
+  router.post('/:id/stop', async (_req, res) => {
     const { name }: ParserRow = res.locals.parser
     try {
       await runner.stop(name)
@@ -140,21 +143,37 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
     }
   })
 
-  router.post('/:name/resume', (_req, res) => {
+  router.post('/:id/rerun', async (_req, res) => {
+    const { name }: ParserRow = res.locals.parser
+    try {
+      await runner.forceRun(name)
+      res.json({ ok: true })
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message })
+    }
+  })
+
+  router.post('/:id/resume', (_req, res) => {
     const { name }: ParserRow = res.locals.parser
     if (runner.isRunning(name)) { res.status(409).json({ error: 'Already running' }); return }
     runner.resume(name).catch((err: Error) => broadcast(name, { type: 'error', message: err.message }))
     res.json({ ok: true })
   })
 
-  router.get('/:name/status', (_req, res) => {
+  router.get('/:id/stats', async (_req, res) => {
+    const { name }: ParserRow = res.locals.parser
+    const stats = await runPersistence.getParserStats(name)
+    res.json(stats)
+  })
+
+  router.get('/:id/status', (_req, res) => {
     const { name }: ParserRow = res.locals.parser
     res.json({ running: runner.isRunning(name), stats: runner.getStats(name) ?? null })
   })
 
   // ── SSE event stream ─────────────────────────────────────────────────────────
 
-  router.get('/:name/events', async (req, res) => {
+  router.get('/:id/events', async (req, res) => {
     const { name }: ParserRow = res.locals.parser
     initSSE(res)
 
@@ -172,7 +191,7 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
 
   // ── Output files ─────────────────────────────────────────────────────────────
 
-  router.get('/:name/files', async (_req, res) => {
+  router.get('/:id/files', async (_req, res) => {
     const { name }: ParserRow = res.locals.parser
     const parserDir = resolve(outputDir, name)
     try {
@@ -203,7 +222,7 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
     }
   })
 
-  router.get('/:name/files/:runId/:file', (req, res) => {
+  router.get('/:id/files/:runId/:file', (req, res) => {
     const { name }: ParserRow = res.locals.parser
     const { runId, file } = req.params
     if (!file.endsWith('.csv') || file.includes('/') || file.includes('..') || runId.includes('/') || runId.includes('..')) {
@@ -219,7 +238,7 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
 
   // ── Steps CRUD ───────────────────────────────────────────────────────────────
 
-  router.post('/:name/steps', async (req, res) => {
+  router.post('/:id/steps', async (req, res) => {
     const { id: parserId }: ParserRow = res.locals.parser
     const { name: stepName, type, entryUrl, outputFile, code, position } = req.body as {
       name: string
@@ -240,19 +259,19 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
     }
   })
 
-  router.get('/:name/steps', async (_req, res) => {
+  router.get('/:id/steps', async (_req, res) => {
     const { id: parserId }: ParserRow = res.locals.parser
     res.json({ steps: await parserService.listSteps(parserId) })
   })
 
-  router.get('/:name/steps/:step', async (req, res) => {
+  router.get('/:id/steps/:step', async (req, res) => {
     const { id: parserId }: ParserRow = res.locals.parser
     const step = await parserService.getStep(parserId, req.params.step)
     if (!step) { res.status(404).json({ error: `Step "${req.params.step}" not found` }); return }
     res.json({ step })
   })
 
-  router.put('/:name/steps/:step', async (req, res) => {
+  router.put('/:id/steps/:step', async (req, res) => {
     const { id: parserId }: ParserRow = res.locals.parser
     const step = await parserService.getStep(parserId, req.params.step)
     if (!step) { res.status(404).json({ error: `Step "${req.params.step}" not found` }); return }
@@ -266,7 +285,7 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
     }
   })
 
-  router.delete('/:name/steps/:step', async (req, res) => {
+  router.delete('/:id/steps/:step', async (req, res) => {
     const { id: parserId }: ParserRow = res.locals.parser
     const deleted = await parserService.deleteStep(parserId, req.params.step)
     if (!deleted) { res.status(404).json({ error: `Step "${req.params.step}" not found` }); return }
@@ -275,7 +294,7 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
 
   // ── Step debug (SSE) ─────────────────────────────────────────────────────────
 
-  router.post('/:name/steps/:step/debug', async (req, res) => {
+  router.post('/:id/steps/:step/debug', async (req, res) => {
     const { name }: ParserRow = res.locals.parser
     const { step } = req.params
     const { url, parent_data } = req.body as { url: string; parent_data?: Record<string, unknown> }

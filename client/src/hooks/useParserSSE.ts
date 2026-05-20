@@ -11,7 +11,7 @@ export interface ParserState {
   stoppedRunExists: boolean
 }
 
-export function useParserSSE(parserName: string): ParserState {
+export function useParserSSE(parserId: string): ParserState {
   const [state, setState] = useState<ParserState>({
     status: 'idle',
     stats: null,
@@ -20,7 +20,7 @@ export function useParserSSE(parserName: string): ParserState {
   })
 
   useEffect(() => {
-    const es = new EventSource(`${API_BASE}/api/parsers/${parserName}/events`)
+    const es = new EventSource(`${API_BASE}/api/parsers/${parserId}/events`)
 
     es.onmessage = (e: MessageEvent) => {
       const msg = JSON.parse(e.data) as {
@@ -62,10 +62,10 @@ export function useParserSSE(parserName: string): ParserState {
     }
 
     es.onerror = (err) => {
-      console.error(`SSE connection error for ${parserName}:`, err)
+      console.error(`SSE connection error for ${parserId}:`, err)
     }
     return () => es.close()
-  }, [parserName])
+  }, [parserId])
 
   return state
 }

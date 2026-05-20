@@ -88,12 +88,37 @@ export class ParserRunnerService extends EventEmitter {
 
   async stop(parserName: string): Promise<void> {
     const orchestrator = this.activeRuns.get(parserName)
-    if (!orchestrator) throw new Error(`No active run for parser "${parserName}"`)
-    const runId = orchestrator.runId
-    await orchestrator.stop()
-    await this.runPersistence.markRunStopped(runId, orchestrator.getAllTasks()).catch(console.error)
-    this.activeRuns.delete(parserName)
-    this.emit('stopped', parserName)
+    if (orchestrator) {
+      const runId = orchestrator.runId
+      await orchestrator.stop()
+      await this.runPersistence.markRunStopped(runId, orchestrator.getAllTasks()).catch(console.error)
+      this.activeRuns.delete(parserName)
+      this.emit('stopped', parserName)
+      return
+    }
+    // Orphaned: server restarted while run was active — clean up DB record
+    const latest = await this.runPersistence.getLatestRunInfo(parserName)
+    if (latest && latest.status === 'running') {
+      await this.runPersistence.update(latest.id, { status: 'stopped', stoppedAt: new Date() })
+      this.emit('stopped', parserName)
+      return
+    }
+    throw new Error(`No active run for parser "${parserName}"`)
+  }
+
+  async forceRun(parserName: string): Promise<void> {
+    const orchestrator = this.activeRuns.get(parserName)
+    if (orchestrator) {
+      await orchestrator.stop()
+      await this.runPersistence.update(orchestrator.runId, { status: 'failed', stoppedAt: new Date() }).catch(console.error)
+      this.activeRuns.delete(parserName)
+    } else {
+      const latest = await this.runPersistence.getLatestRunInfo(parserName)
+      if (latest && latest.status === 'running') {
+        await this.runPersistence.update(latest.id, { status: 'failed', stoppedAt: new Date() })
+      }
+    }
+    await this.run(parserName)
   }
 
   retryTask(parserName: string, taskId: string): void {

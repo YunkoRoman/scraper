@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { listParsersSummary, startParser, stopParser, resumeParser, type ParserSummary } from '../api'
+import { listParsersSummary, startParser, stopParser, resumeParser, rerunParser, type ParserSummary } from '../api'
 import { useSettings } from '../hooks/useSettings'
 import { StatusDot } from './motion/StatusDot'
 import { SpringButton } from './motion/SpringButton'
 import { PARSER_STATUS, UNKNOWN_STATUS } from '../design/status'
 
 interface Props {
-  onEdit: (name: string) => void
+  onEdit: (id: string) => void
+  onViewParser: (id: string) => void
 }
 
 type SortCol = 'name' | 'successRate' | 'lastRunDate'
@@ -46,7 +47,7 @@ function SortableHeader({
   )
 }
 
-export function ParsersPage({ onEdit }: Props) {
+export function ParsersPage({ onEdit, onViewParser }: Props) {
   const { settings } = useSettings()
   const [page, setPage] = useState(1)
   const limit = settings.pageLimit
@@ -109,25 +110,32 @@ export function ParsersPage({ onEdit }: Props) {
     setPage(1)
   }
 
-  async function handleRun(name: string) {
-    setRowLoading((prev) => ({ ...prev, [name]: true }))
-    try { await startParser(name); await fetchData() }
+  async function handleRun(id: string) {
+    setRowLoading((prev) => ({ ...prev, [id]: true }))
+    try { await startParser(id); await fetchData() }
     catch { /* error visible on next poll */ }
-    finally { setRowLoading((prev) => ({ ...prev, [name]: false })) }
+    finally { setRowLoading((prev) => ({ ...prev, [id]: false })) }
   }
 
-  async function handleStop(name: string) {
-    setRowLoading((prev) => ({ ...prev, [name]: true }))
-    try { await stopParser(name); await fetchData() }
+  async function handleStop(id: string) {
+    setRowLoading((prev) => ({ ...prev, [id]: true }))
+    try { await stopParser(id); await fetchData() }
     catch { /* ignore */ }
-    finally { setRowLoading((prev) => ({ ...prev, [name]: false })) }
+    finally { setRowLoading((prev) => ({ ...prev, [id]: false })) }
   }
 
-  async function handleResume(name: string) {
-    setRowLoading((prev) => ({ ...prev, [name]: true }))
-    try { await resumeParser(name); await fetchData() }
+  async function handleResume(id: string) {
+    setRowLoading((prev) => ({ ...prev, [id]: true }))
+    try { await resumeParser(id); await fetchData() }
     catch { /* ignore */ }
-    finally { setRowLoading((prev) => ({ ...prev, [name]: false })) }
+    finally { setRowLoading((prev) => ({ ...prev, [id]: false })) }
+  }
+
+  async function handleRerun(id: string) {
+    setRowLoading((prev) => ({ ...prev, [id]: true }))
+    try { await rerunParser(id); await fetchData() }
+    catch { /* error visible on next poll */ }
+    finally { setRowLoading((prev) => ({ ...prev, [id]: false })) }
   }
 
   const totalPages = Math.ceil(total / limit)
@@ -214,9 +222,9 @@ export function ParsersPage({ onEdit }: Props) {
             )}
             {data.map((parser) => {
               const statusConfig = PARSER_STATUS[parser.status] ?? UNKNOWN_STATUS
-              const busy = rowLoading[parser.name] ?? false
+              const busy = rowLoading[parser.id] ?? false
               return (
-                <tr key={parser.name} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                <tr key={parser.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <StatusDot dotClass={statusConfig.dot} pulse={statusConfig.pulse} />
@@ -225,8 +233,13 @@ export function ParsersPage({ onEdit }: Props) {
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
-                    {parser.name}
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => onViewParser(parser.id)}
+                      className="text-sm font-medium text-gray-900 dark:text-white hover:text-emerald-600 dark:hover:text-emerald-400 hover:underline transition-colors text-left"
+                    >
+                      {parser.name}
+                    </button>
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <SuccessRateCell rate={parser.successRate} />
@@ -237,25 +250,25 @@ export function ParsersPage({ onEdit }: Props) {
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
                       {parser.status === 'running' ? (
-                        <SpringButton variant="danger" onClick={() => handleStop(parser.name)} loading={busy} className="text-xs py-1 px-3">
-                          Stop
-                        </SpringButton>
-                      ) : parser.status === 'stopped' ? (
                         <>
-                          <SpringButton variant="warning" onClick={() => handleResume(parser.name)} loading={busy} className="text-xs py-1 px-3">
-                            Resume
+                          <SpringButton variant="danger" onClick={() => handleStop(parser.id)} loading={busy} className="text-xs py-1 px-3">
+                            Stop
                           </SpringButton>
-                          <SpringButton variant="ghost" onClick={() => handleRun(parser.name)} disabled={busy} className="text-xs py-1 px-3 border border-gray-300 dark:border-gray-600">
-                            Run Fresh
+                          <SpringButton variant="warning" onClick={() => handleRerun(parser.id)} loading={busy} className="text-xs py-1 px-3">
+                            Rerun
                           </SpringButton>
                         </>
+                      ) : parser.status === 'stopped' ? (
+                        <SpringButton variant="success" onClick={() => handleRun(parser.id)} loading={busy} className="text-xs py-1 px-3">
+                          Run
+                        </SpringButton>
                       ) : (
-                        <SpringButton variant="success" onClick={() => handleRun(parser.name)} loading={busy} className="text-xs py-1 px-3">
+                        <SpringButton variant="success" onClick={() => handleRun(parser.id)} loading={busy} className="text-xs py-1 px-3">
                           Run
                         </SpringButton>
                       )}
                       <button
-                        onClick={() => onEdit(parser.name)}
+                        onClick={() => onEdit(parser.id)}
                         className="text-xs px-3 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors"
                       >
                         Edit

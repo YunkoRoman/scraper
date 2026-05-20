@@ -7,7 +7,7 @@ import {
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
-export function useParserEditor(parserName: string) {
+export function useParserEditor(parserId: string) {
   const [parser, setParser] = useState<ParserRow | null>(null)
   const [steps, setSteps] = useState<StepRow[]>([])
   const [selectedStepName, setSelectedStepName] = useState<string | null>(null)
@@ -20,11 +20,11 @@ export function useParserEditor(parserName: string) {
   const selectedStep = steps.find((s) => s.name === selectedStepName) ?? null
 
   useEffect(() => {
-    if (!parserName) return
+    if (!parserId) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     setError(null)
-    getParser(parserName)
+    getParser(parserId)
       .then(({ parser: p, steps: ss }) => {
         setParser(p)
         setSteps(ss)
@@ -35,7 +35,7 @@ export function useParserEditor(parserName: string) {
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [parserName])
+  }, [parserId])
 
   // Clear debounce timer on unmount to prevent setState-after-unmount
   useEffect(() => {
@@ -60,40 +60,40 @@ export function useParserEditor(parserName: string) {
     // Capture selectedStepName at schedule time so the timeout uses the correct step
     const capturedStepName = selectedStepName
     debounceRef.current = setTimeout(async () => {
-      if (!parserName || !capturedStepName) return
+      if (!parserId || !capturedStepName) return
       setSaveStatus('saving')
       try {
-        const updated = await updateStep(parserName, capturedStepName, { code: newCode })
+        const updated = await updateStep(parserId, capturedStepName, { code: newCode })
         setSteps((prev) => prev.map((s) => s.name === capturedStepName ? updated : s))
         setSaveStatus('saved')
       } catch {
         setSaveStatus('error')
       }
     }, 1000)
-  }, [parserName, selectedStepName])
+  }, [parserId, selectedStepName])
 
   const saveNow = useCallback(async () => {
-    if (!parserName || !selectedStepName) return
+    if (!parserId || !selectedStepName) return
     if (debounceRef.current) clearTimeout(debounceRef.current)
     setSaveStatus('saving')
     try {
-      const updated = await updateStep(parserName, selectedStepName, { code })
+      const updated = await updateStep(parserId, selectedStepName, { code })
       setSteps((prev) => prev.map((s) => s.name === selectedStepName ? updated : s))
       setSaveStatus('saved')
     } catch {
       setSaveStatus('error')
     }
-  }, [parserName, selectedStepName, code])
+  }, [parserId, selectedStepName, code])
 
   // templateCode is saved immediately to DB so state stays consistent regardless of
   // when React batches the selectedStepName update
   const addStep = useCallback(async (name: string, type: 'traverser' | 'extractor', templateCode?: string) => {
-    if (!parserName) return
+    if (!parserId) return
     try {
-      const created = await createStep(parserName, { name, type })
+      const created = await createStep(parserId, { name, type })
       let stepWithCode = created
       if (templateCode) {
-        const saved = await updateStep(parserName, name, { code: templateCode })
+        const saved = await updateStep(parserId, name, { code: templateCode })
         stepWithCode = saved
       }
       setSteps((prev) => [...prev, stepWithCode])
@@ -103,12 +103,12 @@ export function useParserEditor(parserName: string) {
     } catch (e) {
       setError((e as Error).message)
     }
-  }, [parserName])
+  }, [parserId])
 
   const removeStep = useCallback(async (name: string) => {
-    if (!parserName) return
+    if (!parserId) return
     try {
-      await deleteStep(parserName, name)
+      await deleteStep(parserId, name)
       // Compute next selection outside the updater (avoids side-effects in pure updater)
       const next = steps.filter((s) => s.name !== name)
       setSteps(next)
@@ -119,27 +119,27 @@ export function useParserEditor(parserName: string) {
     } catch (e) {
       setError((e as Error).message)
     }
-  }, [parserName, selectedStepName, steps])
+  }, [parserId, selectedStepName, steps])
 
   const saveStepMeta = useCallback(async (stepName: string, input: UpdateStepInput) => {
-    if (!parserName) return
+    if (!parserId) return
     try {
-      const updated = await updateStep(parserName, stepName, input)
+      const updated = await updateStep(parserId, stepName, input)
       setSteps((prev) => prev.map((s) => s.name === stepName ? updated : s))
     } catch (e) {
       setError((e as Error).message)
     }
-  }, [parserName])
+  }, [parserId])
 
   const saveParserSettings = useCallback(async (input: UpdateParserInput) => {
-    if (!parserName) return
+    if (!parserId) return
     try {
-      const updated = await updateParser(parserName, input)
+      const updated = await updateParser(parserId, input)
       setParser(updated)
     } catch (e) {
       setError((e as Error).message)
     }
-  }, [parserName])
+  }, [parserId])
 
   return {
     parser, steps, selectedStep, selectedStepName, code,

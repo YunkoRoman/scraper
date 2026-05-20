@@ -38,7 +38,8 @@ export function createJobsRouter({ runner, runPersistence }: Deps) {
       return
     }
 
-    res.json(await runPersistence.getAllRuns(page, limit))
+    const parserNameFilter = req.query.parserName as string | undefined
+    res.json(await runPersistence.getAllRuns(page, limit, parserNameFilter ? { parserName: parserNameFilter } : undefined))
   })
 
   router.get('/:runId', async (req, res) => {

@@ -50,13 +50,13 @@ const LogLine = ({ line }: { line: any }) => {
 }
 
 interface Props {
-  parserName: string
+  parserId: string
   stepName: string
   initialUrl: string
   onClose: () => void
 }
 
-export function StepDebugPanel({ parserName, stepName, initialUrl, onClose }: Props) {
+export function StepDebugPanel({ parserId, stepName, initialUrl, onClose }: Props) {
   const [url, setUrl] = useState(initialUrl)
   const [parentDataJson, setParentDataJson] = useState('')
   const consoleRef = useRef<HTMLDivElement>(null)
@@ -127,7 +127,7 @@ export function StepDebugPanel({ parserName, stepName, initialUrl, onClose }: Pr
         <div className="flex gap-2">
           <SpringButton
             variant="primary"
-            onClick={() => run(parserName, stepName, url, parseJsonSafe(parentDataJson))}
+            onClick={() => run(parserId, stepName, url, parseJsonSafe(parentDataJson))}
             disabled={!canRun}
             loading={isRunning}
             className="flex-1 text-xs px-3 py-2"

@@ -24,6 +24,7 @@ export interface OutputFile {
 }
 
 export interface ParserSummary {
+  id: string
   name: string
   status: 'idle' | 'running' | 'stopped'
   successRate: number | null
@@ -43,9 +44,8 @@ export interface ListParsersSummaryParams {
 export const API_BASE = 'http://localhost:3001'
 
 export async function listParsers(): Promise<string[]> {
-  const res = await fetch(`${API_BASE}/api/parsers`)
-  const data = await res.json()
-  return data.parsers as string[]
+  const data = await apiRequest<{ parsers: ParserSummary[]; total: number }>('/api/parsers?limit=500')
+  return data.parsers.map((p) => p.name)
 }
 
 export async function listParsersSummary(
@@ -61,35 +61,25 @@ export async function listParsersSummary(
   return apiRequest(`/api/parsers?${q}`)
 }
 
-export async function startParser(name: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/parsers/${name}/start`, { method: 'POST' })
-  if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err.error ?? 'Failed to start')
-  }
+export async function startParser(id: string): Promise<void> {
+  await apiRequest(`/api/parsers/${id}/start`, { method: 'POST' })
 }
 
-export async function stopParser(name: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/parsers/${name}/stop`, { method: 'POST' })
-  if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err.error ?? 'Failed to stop')
-  }
+export async function stopParser(id: string): Promise<void> {
+  await apiRequest(`/api/parsers/${id}/stop`, { method: 'POST' })
 }
 
-export async function getStatus(name: string): Promise<{ running: boolean; stats: RunStats | null }> {
-  const res = await fetch(`${API_BASE}/api/parsers/${name}/status`)
-  return res.json()
+export async function getStatus(id: string): Promise<{ running: boolean; stats: RunStats | null }> {
+  return apiRequest(`/api/parsers/${id}/status`)
 }
 
-export async function listFiles(name: string): Promise<OutputFile[]> {
-  const res = await fetch(`${API_BASE}/api/parsers/${name}/files`)
-  const data = await res.json()
-  return data.files as OutputFile[]
+export async function listFiles(id: string): Promise<OutputFile[]> {
+  const data = await apiRequest<{ files: OutputFile[] }>(`/api/parsers/${id}/files`)
+  return data.files
 }
 
-export function downloadFile(parserName: string, runId: string, fileName: string): void {
-  window.open(`${API_BASE}/api/parsers/${parserName}/files/${encodeURIComponent(runId)}/${encodeURIComponent(fileName)}`, '_blank')
+export function downloadFile(parserId: string, runId: string, fileName: string): void {
+  window.open(`${API_BASE}/api/parsers/${parserId}/files/${encodeURIComponent(runId)}/${encodeURIComponent(fileName)}`, '_blank')
 }
 
 export interface StepInfo {
@@ -103,8 +93,8 @@ export interface TraverserResult {
   parent_data?: Record<string, unknown>
 }
 
-export async function listSteps(parserName: string): Promise<StepInfo[]> {
-  const res = await fetch(`${API_BASE}/api/parsers/${parserName}/steps`)
+export async function listSteps(parserId: string): Promise<StepInfo[]> {
+  const res = await fetch(`${API_BASE}/api/parsers/${parserId}/steps`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { error?: string }).error ?? 'Failed to load steps')
@@ -121,6 +111,28 @@ export interface DashboardPerformanceDay {
 
 export async function getDashboardPerformance(): Promise<{ days: DashboardPerformanceDay[] }> {
   return apiRequest('/api/dashboard/performance')
+}
+
+export interface ParserStats {
+  totalRuns: number
+  successRate: number | null
+  avgDurationSeconds: number | null
+}
+
+export async function getParserStats(parserId: string): Promise<ParserStats> {
+  return apiRequest(`/api/parsers/${parserId}/stats`)
+}
+
+export async function fetchFileContent(
+  parserId: string,
+  runId: string,
+  fileName: string,
+): Promise<string> {
+  const res = await fetch(
+    `${API_BASE}/api/parsers/${parserId}/files/${encodeURIComponent(runId)}/${encodeURIComponent(fileName)}`,
+  )
+  if (!res.ok) throw new Error(`Failed to fetch file: ${res.status}`)
+  return res.text()
 }
 
 export interface ParserRow {
@@ -207,12 +219,12 @@ export async function createParser(input: CreateParserInput): Promise<ParserRow>
   return data.parser
 }
 
-export async function getParser(name: string): Promise<{ parser: ParserRow; steps: StepRow[] }> {
-  return apiRequest(`/api/parsers/${encodeURIComponent(name)}`)
+export async function getParser(id: string): Promise<{ parser: ParserRow; steps: StepRow[] }> {
+  return apiRequest(`/api/parsers/${id}`)
 }
 
-export async function updateParser(name: string, input: UpdateParserInput): Promise<ParserRow> {
-  const data = await apiRequest<{ parser: ParserRow }>(`/api/parsers/${encodeURIComponent(name)}`, {
+export async function updateParser(id: string, input: UpdateParserInput): Promise<ParserRow> {
+  const data = await apiRequest<{ parser: ParserRow }>(`/api/parsers/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -220,12 +232,12 @@ export async function updateParser(name: string, input: UpdateParserInput): Prom
   return data.parser
 }
 
-export async function deleteParser(name: string): Promise<void> {
-  await apiRequest(`/api/parsers/${encodeURIComponent(name)}`, { method: 'DELETE' })
+export async function deleteParser(id: string): Promise<void> {
+  await apiRequest(`/api/parsers/${id}`, { method: 'DELETE' })
 }
 
-export async function createStep(parserName: string, input: CreateStepInput): Promise<StepRow> {
-  const data = await apiRequest<{ step: StepRow }>(`/api/parsers/${encodeURIComponent(parserName)}/steps`, {
+export async function createStep(parserId: string, input: CreateStepInput): Promise<StepRow> {
+  const data = await apiRequest<{ step: StepRow }>(`/api/parsers/${parserId}/steps`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -233,13 +245,13 @@ export async function createStep(parserName: string, input: CreateStepInput): Pr
   return data.step
 }
 
-export async function getStep(parserName: string, stepName: string): Promise<StepRow> {
-  const data = await apiRequest<{ step: StepRow }>(`/api/parsers/${encodeURIComponent(parserName)}/steps/${encodeURIComponent(stepName)}`)
+export async function getStep(parserId: string, stepName: string): Promise<StepRow> {
+  const data = await apiRequest<{ step: StepRow }>(`/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}`)
   return data.step
 }
 
-export async function updateStep(parserName: string, stepName: string, input: UpdateStepInput): Promise<StepRow> {
-  const data = await apiRequest<{ step: StepRow }>(`/api/parsers/${encodeURIComponent(parserName)}/steps/${encodeURIComponent(stepName)}`, {
+export async function updateStep(parserId: string, stepName: string, input: UpdateStepInput): Promise<StepRow> {
+  const data = await apiRequest<{ step: StepRow }>(`/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -247,8 +259,8 @@ export async function updateStep(parserName: string, stepName: string, input: Up
   return data.step
 }
 
-export async function deleteStep(parserName: string, stepName: string): Promise<void> {
-  await apiRequest(`/api/parsers/${encodeURIComponent(parserName)}/steps/${encodeURIComponent(stepName)}`, { method: 'DELETE' })
+export async function deleteStep(parserId: string, stepName: string): Promise<void> {
+  await apiRequest(`/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}`, { method: 'DELETE' })
 }
 
 export interface RunInfo {
@@ -284,9 +296,11 @@ export async function listJobs(
   page = 1,
   limit = 50,
   status?: string,
+  parserName?: string,
 ): Promise<{ runs: (RunInfo & { elapsed?: number })[]; total: number }> {
   const q = new URLSearchParams({ page: String(page), limit: String(limit) })
-  if (status) q.set('status', status)
+  if (status)     q.set('status',     status)
+  if (parserName) q.set('parserName', parserName)
   return apiRequest(`/api/jobs?${q}`)
 }
 
@@ -333,10 +347,10 @@ export async function abortTask(runId: string, taskId: string): Promise<void> {
   await apiRequest(`/api/jobs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/abort`, { method: 'POST' })
 }
 
-export async function resumeParser(name: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/parsers/${encodeURIComponent(name)}/resume`, { method: 'POST' })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error((err as { error?: string }).error ?? 'Failed to resume')
-  }
+export async function resumeParser(id: string): Promise<void> {
+  await apiRequest(`/api/parsers/${id}/resume`, { method: 'POST' })
+}
+
+export async function rerunParser(id: string): Promise<void> {
+  await apiRequest(`/api/parsers/${id}/rerun`, { method: 'POST' })
 }

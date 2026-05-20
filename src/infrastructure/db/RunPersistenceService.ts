@@ -4,7 +4,14 @@ import { BasePersistenceService } from './BasePersistenceService.js'
 import type { PageTask } from '../../domain/entities/PageTask.js'
 import type { RunStats } from '../../domain/entities/ParserRun.js'
 
+export interface ParserStats {
+  totalRuns: number
+  successRate: number | null
+  avgDurationSeconds: number | null
+}
+
 export interface RawParserEnriched {
+  id: string
   name: string
   dbStatus: 'running' | 'stopped' | 'idle'
   lastRunDate: string | null
@@ -166,13 +173,19 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
     return { ...row.run, browserType: row.browserType ?? 'playwright', stats }
   }
 
-  async getAllRuns(page: number, limit: number): Promise<{ runs: (RunInfo & { failedCount: number })[]; total: number }> {
+  async getAllRuns(
+    page: number,
+    limit: number,
+    options?: { parserName?: string },
+  ): Promise<{ runs: (RunInfo & { failedCount: number })[]; total: number }> {
     const offset = (page - 1) * limit
+    const filter = options?.parserName ? eq(parserRuns.parserName, options.parserName) : undefined
     const rows = await this.db.select().from(parserRuns)
+      .where(filter)
       .orderBy(desc(parserRuns.startedAt))
       .limit(limit)
       .offset(offset)
-    const [{ count }] = await this.db.select({ count: sql<number>`count(*)::int` }).from(parserRuns)
+    const [{ count }] = await this.db.select({ count: sql<number>`count(*)::int` }).from(parserRuns).where(filter)
 
     if (rows.length === 0) return { runs: [], total: count }
 
@@ -244,6 +257,7 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
     const pattern = `%${search ?? ''}%`
 
     type Row = {
+      parser_id: string
       name: string
       run_id: string | null
       run_status: string | null
@@ -268,6 +282,7 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
         GROUP BY run_id
       )
       SELECT
+        p.id          AS parser_id,
         p.name,
         lr.id         AS run_id,
         lr.status     AS run_status,
@@ -282,9 +297,11 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
     `)
 
     return (result.rows as Row[]).map((r) => ({
+      id: r.parser_id,
       name: r.name,
       dbStatus: (r.run_status === 'running' ? 'running'
         : r.run_status === 'stopped' ? 'stopped'
+        : r.run_status === 'failed' ? 'idle'
         : 'idle') as 'running' | 'stopped' | 'idle',
       lastRunDate: r.started_at ? (r.started_at instanceof Date ? r.started_at.toISOString() : String(r.started_at)) : null,
       lastRunId: r.run_id ?? null,
@@ -310,6 +327,35 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
     `)
 
     return result.rows as Row[]
+  }
+
+  async getParserStats(parserName: string): Promise<ParserStats> {
+    type Row = {
+      total_runs: number
+      successful_runs: number
+      avg_duration_seconds: number | null
+    }
+    const result = await this.db.execute<Row>(sql`
+      SELECT
+        COUNT(*)::int                                                        AS total_runs,
+        COUNT(CASE WHEN status = 'completed' THEN 1 END)::int               AS successful_runs,
+        ROUND(AVG(
+          CASE WHEN stopped_at IS NOT NULL
+            THEN EXTRACT(EPOCH FROM (stopped_at - started_at))
+          END
+        ))::int                                                              AS avg_duration_seconds
+      FROM parser_runs
+      WHERE parser_name = ${parserName}
+    `)
+    const row = result.rows[0] as Row | undefined
+    if (!row || row.total_runs === 0) {
+      return { totalRuns: 0, successRate: null, avgDurationSeconds: null }
+    }
+    return {
+      totalRuns: row.total_runs,
+      successRate: Math.round((row.successful_runs / row.total_runs) * 100),
+      avgDurationSeconds: row.avg_duration_seconds,
+    }
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
