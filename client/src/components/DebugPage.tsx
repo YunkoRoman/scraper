@@ -1,6 +1,6 @@
 // client/src/components/DebugPage.tsx
 import { useEffect, useRef, useState } from 'react'
-import { listParsers, listSteps, getStep } from '../api'
+import { listParsersSummary, listSteps, getStep } from '../api'
 import type { StepInfo } from '../api'
 import { JsonEditor } from './JsonEditor'
 import { useDebugRun } from '../hooks/useDebugRun'
@@ -44,8 +44,8 @@ function ResultPanel({ result }: { result: DebugResult }) {
 }
 
 export function DebugPage() {
-  const [parsers, setParsers] = useState<string[]>([])
-  const [selectedParser, setSelectedParser] = useState('')
+  const [parsers, setParsers] = useState<{ id: string; name: string }[]>([])
+  const [selectedParserId, setSelectedParserId] = useState('')
   const [steps, setSteps] = useState<StepInfo[]>([])
   const [selectedStep, setSelectedStep] = useState('')
   const [url, setUrl] = useState('')
@@ -56,17 +56,19 @@ export function DebugPage() {
   const isRunning = status === 'running'
 
   useEffect(() => {
-    listParsers().then(setParsers).catch(() => setParsers([]))
+    listParsersSummary({ limit: 500 })
+      .then((r) => setParsers(r.parsers.map((p) => ({ id: p.id, name: p.name }))))
+      .catch(() => setParsers([]))
   }, [])
 
   useEffect(() => {
-    if (!selectedParser) {
+    if (!selectedParserId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSteps([])
       setSelectedStep('')
       return
     }
-    listSteps(selectedParser)
+    listSteps(selectedParserId)
       .then((s) => {
         setSteps(s)
         setSelectedStep(s[0]?.name ?? '')
@@ -75,14 +77,14 @@ export function DebugPage() {
         setSteps([])
         setSelectedStep('')
       })
-  }, [selectedParser])
+  }, [selectedParserId])
 
   useEffect(() => {
-    if (!selectedParser || !selectedStep) return
-    getStep(selectedParser, selectedStep)
+    if (!selectedParserId || !selectedStep) return
+    getStep(selectedParserId, selectedStep)
       .then((s) => { if (s.entryUrl) setUrl(s.entryUrl) })
       .catch(() => {})
-  }, [selectedParser, selectedStep])
+  }, [selectedParserId, selectedStep])
 
   // Auto-scroll console
   useEffect(() => {
@@ -93,12 +95,12 @@ export function DebugPage() {
 
   function handleRun() {
     const parent_data = parseJsonSafe(parentDataJson)
-    run(selectedParser, selectedStep, url, parent_data)
+    run(selectedParserId, selectedStep, url, parent_data)
   }
 
   const parentDataError =
     parentDataJson.trim() !== '' && parseJsonSafe(parentDataJson) === undefined
-  const canRun = !isRunning && !!selectedParser && !!selectedStep && !!url.trim() && !parentDataError
+  const canRun = !isRunning && !!selectedParserId && !!selectedStep && !!url.trim() && !parentDataError
 
   const selectClass =
     'w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 ' +
@@ -121,14 +123,14 @@ export function DebugPage() {
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Parser</label>
             <select
-              value={selectedParser}
-              onChange={(e) => { setSelectedParser(e.target.value); reset() }}
+              value={selectedParserId}
+              onChange={(e) => { setSelectedParserId(e.target.value); reset() }}
               disabled={isRunning}
               className={selectClass}
             >
               <option value="">— select —</option>
               {parsers.map((p) => (
-                <option key={p} value={p}>{p}</option>
+                <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
           </div>

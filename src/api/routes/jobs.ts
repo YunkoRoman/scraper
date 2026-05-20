@@ -14,9 +14,32 @@ export function createJobsRouter({ runner, runPersistence }: Deps) {
   // ── Runs ─────────────────────────────────────────────────────────────────────
 
   router.get('/', async (req, res) => {
-    const page  = Math.max(1,   parseInt(String(req.query.page  ?? '1'),  10))
-    const limit = Math.min(100, parseInt(String(req.query.limit ?? '50'), 10))
-    res.json(await runPersistence.getAllRuns(page, limit))
+    const page   = Math.max(1,   parseInt(String(req.query.page  ?? '1'),  10) || 1)
+    const limit  = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '50'), 10) || 50))
+    const status = req.query.status as string | undefined
+
+    if (status === 'running') {
+      const runningNames = runner.listRunning()
+      const runs = await Promise.all(
+        runningNames.map(async (name) => {
+          const orch = runner.getOrchestrator(name)
+          if (!orch) return null
+          const run = await runPersistence.findById(orch.runId)
+          if (!run) return null
+          const stats = runner.getStats(name) ?? null
+          const elapsed = run.startedAt
+            ? Math.floor((Date.now() - new Date(run.startedAt).getTime()) / 1000)
+            : 0
+          return { ...run, isRunning: true, stats, elapsed }
+        }),
+      )
+      const active = runs.filter(Boolean)
+      res.json({ runs: active, total: active.length })
+      return
+    }
+
+    const parserNameFilter = req.query.parserName as string | undefined
+    res.json(await runPersistence.getAllRuns(page, limit, parserNameFilter ? { parserName: parserNameFilter } : undefined))
   })
 
   router.get('/:runId', async (req, res) => {

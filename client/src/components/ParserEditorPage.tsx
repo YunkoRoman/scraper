@@ -6,7 +6,7 @@ import { StepDebugPanel } from './StepDebugPanel'
 import { ParserSettingsPanel } from './ParserSettingsPanel'
 import { JsonEditor } from './JsonEditor'
 import { createParser, type CreateParserInput } from '../api'
-import { useTheme } from '../hooks/useTheme'
+import { useSettings } from '../hooks/useSettings'
 import { AnimatePresence, motion } from 'framer-motion'
 import { SpringButton } from './motion/SpringButton'
 import { staggerItemVariants } from './motion/StaggerList'
@@ -154,20 +154,20 @@ function StepSettingsBar({
 }
 
 interface Props {
-  parserName: string
+  parserId: string
   onNavigateToParsers: () => void
-  onParserSelect: (name: string) => void
+  onParserSelect: (id: string) => void
 }
 
-export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSelect }: Props) {
-  const { theme } = useTheme()
-  const monacoTheme = theme === 'dark' ? 'vs-dark' : 'light'
+export function ParserEditorPage({ parserId, onNavigateToParsers, onParserSelect }: Props) {
+  const { settings } = useSettings()
+  const monacoTheme = settings.theme === 'dark' || (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'vs-dark' : 'light'
 
   const {
     parser, steps, selectedStep, selectedStepName, code,
     saveStatus, loading, error,
     selectStep, handleCodeChange, saveNow, addStep, removeStep, saveParserSettings, saveStepMeta,
-  } = useParserEditor(parserName)
+  } = useParserEditor(parserId)
 
   const [newParserName, setNewParserName] = useState('')
   const [newParserEntryUrl, setNewParserEntryUrl] = useState('')
@@ -189,7 +189,7 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
   const saveStatusLabel = saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : saveStatus === 'error' ? 'Save failed' : ''
 
   // New parser creation form
-  if (!parserName) {
+  if (!parserId) {
     const fieldClass =
       'w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm ' +
       'text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-emerald-400'
@@ -217,7 +217,7 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
           concurrentQuota: newParserQuota ? parseInt(newParserQuota, 10) : null,
           browserSettings,
         } satisfies CreateParserInput)
-        onParserSelect(p.name)
+        onParserSelect(p.id)
       } catch (e) {
         setCreateError((e as Error).message)
       } finally {
@@ -640,7 +640,7 @@ export function ParserEditorPage({ parserName, onNavigateToParsers, onParserSele
                       className="absolute right-0 top-0 h-full z-10 shadow-xl"
                     >
                       <StepDebugPanel
-                        parserName={parserName}
+                        parserId={parserId}
                         stepName={selectedStep.name}
                         initialUrl={selectedStep.entryUrl}
                         onClose={() => setShowDebug(false)}

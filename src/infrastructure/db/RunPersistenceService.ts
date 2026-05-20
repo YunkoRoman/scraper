@@ -4,6 +4,22 @@ import { BasePersistenceService } from './BasePersistenceService.js'
 import type { PageTask } from '../../domain/entities/PageTask.js'
 import type { RunStats } from '../../domain/entities/ParserRun.js'
 
+export interface ParserStats {
+  totalRuns: number
+  successRate: number | null
+  avgDurationSeconds: number | null
+}
+
+export interface RawParserEnriched {
+  id: string
+  name: string
+  dbStatus: 'running' | 'stopped' | 'idle'
+  lastRunDate: string | null
+  lastRunId: string | null
+  /** Percentage of tasks with state='success' in the latest run. Null if no runs. */
+  successRate: number | null
+}
+
 export interface RunInfo {
   id: string
   parserName: string
@@ -157,13 +173,19 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
     return { ...row.run, browserType: row.browserType ?? 'playwright', stats }
   }
 
-  async getAllRuns(page: number, limit: number): Promise<{ runs: (RunInfo & { failedCount: number })[]; total: number }> {
+  async getAllRuns(
+    page: number,
+    limit: number,
+    options?: { parserName?: string },
+  ): Promise<{ runs: (RunInfo & { failedCount: number })[]; total: number }> {
     const offset = (page - 1) * limit
+    const filter = options?.parserName ? eq(parserRuns.parserName, options.parserName) : undefined
     const rows = await this.db.select().from(parserRuns)
+      .where(filter)
       .orderBy(desc(parserRuns.startedAt))
       .limit(limit)
       .offset(offset)
-    const [{ count }] = await this.db.select({ count: sql<number>`count(*)::int` }).from(parserRuns)
+    const [{ count }] = await this.db.select({ count: sql<number>`count(*)::int` }).from(parserRuns).where(filter)
 
     if (rows.length === 0) return { runs: [], total: count }
 
@@ -229,6 +251,111 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
     await this.db.update(runTasks)
       .set({ state: 'pending', error: null, attempts: 0, updatedAt: new Date() })
       .where(and(eq(runTasks.runId, runId), eq(runTasks.state, 'failed')))
+  }
+
+  async listParsersWithLatestRun(search: string): Promise<RawParserEnriched[]> {
+    const pattern = `%${search ?? ''}%`
+
+    type Row = {
+      parser_id: string
+      name: string
+      run_id: string | null
+      run_status: string | null
+      started_at: Date | null
+      success_count: number
+      total_count: number
+    }
+
+    const result = await this.db.execute<Row>(sql`
+      WITH latest_runs AS (
+        SELECT DISTINCT ON (parser_name) id, parser_name, status, started_at
+        FROM parser_runs
+        ORDER BY parser_name, started_at DESC
+      ),
+      run_stats AS (
+        SELECT
+          run_id,
+          COUNT(CASE WHEN state = 'success' THEN 1 END)::int AS success_count,
+          COUNT(*)::int AS total_count
+        FROM run_tasks
+        WHERE run_id IN (SELECT id FROM latest_runs)
+        GROUP BY run_id
+      )
+      SELECT
+        p.id          AS parser_id,
+        p.name,
+        lr.id         AS run_id,
+        lr.status     AS run_status,
+        lr.started_at AS started_at,
+        COALESCE(rs.success_count, 0) AS success_count,
+        COALESCE(rs.total_count,   0) AS total_count
+      FROM parsers p
+      LEFT JOIN latest_runs lr  ON lr.parser_name = p.name
+      LEFT JOIN run_stats    rs ON rs.run_id = lr.id
+      WHERE p.name ILIKE ${pattern}
+      ORDER BY p.name ASC
+    `)
+
+    return (result.rows as Row[]).map((r) => ({
+      id: r.parser_id,
+      name: r.name,
+      dbStatus: (r.run_status === 'running' ? 'running'
+        : r.run_status === 'stopped' ? 'stopped'
+        : r.run_status === 'failed' ? 'idle'
+        : 'idle') as 'running' | 'stopped' | 'idle',
+      lastRunDate: r.started_at ? (r.started_at instanceof Date ? r.started_at.toISOString() : String(r.started_at)) : null,
+      lastRunId: r.run_id ?? null,
+      successRate: r.total_count > 0
+        ? Math.round((r.success_count / r.total_count) * 100)
+        : null,
+    }))
+  }
+
+  /** Returns daily run counts for the last 30 days. Dates with no runs are omitted from the result. */
+  async getPerformanceLast30Days(): Promise<{ date: string; successful: number; failed: number }[]> {
+    type Row = { date: string; successful: number; failed: number }
+
+    const result = await this.db.execute<Row>(sql`
+      SELECT
+        TO_CHAR(DATE(started_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS date,
+        COUNT(CASE WHEN status IN ('completed') THEN 1 END)::int    AS successful,
+        COUNT(CASE WHEN status IN ('failed')    THEN 1 END)::int    AS failed
+      FROM parser_runs
+      WHERE started_at >= NOW() - INTERVAL '30 days'
+      GROUP BY DATE(started_at AT TIME ZONE 'UTC')
+      ORDER BY date ASC
+    `)
+
+    return result.rows as Row[]
+  }
+
+  async getParserStats(parserName: string): Promise<ParserStats> {
+    type Row = {
+      total_runs: number
+      successful_runs: number
+      avg_duration_seconds: number | null
+    }
+    const result = await this.db.execute<Row>(sql`
+      SELECT
+        COUNT(*)::int                                                        AS total_runs,
+        COUNT(CASE WHEN status = 'completed' THEN 1 END)::int               AS successful_runs,
+        ROUND(AVG(
+          CASE WHEN stopped_at IS NOT NULL
+            THEN EXTRACT(EPOCH FROM (stopped_at - started_at))
+          END
+        ))::int                                                              AS avg_duration_seconds
+      FROM parser_runs
+      WHERE parser_name = ${parserName}
+    `)
+    const row = result.rows[0] as Row | undefined
+    if (!row || row.total_runs === 0) {
+      return { totalRuns: 0, successRate: null, avgDurationSeconds: null }
+    }
+    return {
+      totalRuns: row.total_runs,
+      successRate: Math.round((row.successful_runs / row.total_runs) * 100),
+      avgDurationSeconds: row.avg_duration_seconds,
+    }
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

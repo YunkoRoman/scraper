@@ -31,7 +31,7 @@ export function useDebugRun() {
   useEffect(() => () => abortRef.current?.abort(), [])
 
   async function run(
-    parserName: string,
+    parserId: string,
     stepName: string,
     url: string,
     parent_data?: Record<string, unknown>,
@@ -43,7 +43,7 @@ export function useDebugRun() {
     setState({ status: 'running', logs: [], result: null, error: null })
 
     try {
-      const res = await fetch(`${API_BASE}/api/parsers/${parserName}/steps/${stepName}/debug`, {
+      const res = await fetch(`${API_BASE}/api/parsers/${parserId}/steps/${stepName}/debug`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, parent_data }),

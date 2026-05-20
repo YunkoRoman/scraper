@@ -10,6 +10,7 @@ import { ParserPersistenceService } from '../infrastructure/db/ParserPersistence
 import { broadcast } from './sse.js'
 import { createParsersRouter } from './routes/parsers.js'
 import { createJobsRouter } from './routes/jobs.js'
+import { createDashboardRouter } from './routes/dashboard.js'
 
 // ── Services ──────────────────────────────────────────────────────────────────
 const outputDir      = resolve(process.cwd(), 'output')
@@ -34,6 +35,7 @@ app.use(cors({ origin: (origin, cb) => {
 app.use(express.json({ limit: '1mb' }))
 app.use('/api/parsers', createParsersRouter({ runner, runPersistence, parserService, dbLoader, outputDir }))
 app.use('/api/jobs',    createJobsRouter({ runner, runPersistence }))
+app.use('/api/dashboard', createDashboardRouter({ runPersistence }))
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err)
