@@ -16,6 +16,13 @@ export interface RunStats {
   extractors: StepTypeStats
 }
 
+export interface StepStat {
+  stepName: string
+  total: number
+  success: number
+  failed: number
+}
+
 export interface OutputFile {
   name: string
   runId: string
@@ -310,14 +317,20 @@ export async function getJob(runId: string): Promise<RunInfo> {
   return apiRequest(`/api/jobs/${encodeURIComponent(runId)}`)
 }
 
+export async function getJobStepStats(runId: string): Promise<{ steps: StepStat[] }> {
+  return apiRequest(`/api/jobs/${encodeURIComponent(runId)}/step-stats`)
+}
+
 export async function getJobTasks(
   runId: string,
   page = 1,
   limit = 100,
   status?: string,
+  stepName?: string,
 ): Promise<{ tasks: TaskRow[]; total: number }> {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) })
-  if (status) params.set('status', status)
+  if (status)   params.set('status',   status)
+  if (stepName) params.set('stepName', stepName)
   return apiRequest(`/api/jobs/${encodeURIComponent(runId)}/tasks?${params}`)
 }
 
