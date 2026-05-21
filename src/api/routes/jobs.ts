@@ -86,21 +86,43 @@ export function createJobsRouter({ runner, runPersistence }: Deps) {
 
   // ── Tasks ────────────────────────────────────────────────────────────────────
 
+  router.get('/:runId/step-stats', async (req, res) => {
+    const { runId } = req.params
+    const parserName = runner.findParserByRunId(runId)
+    const orch = parserName ? runner.getOrchestrator(parserName) : undefined
+    if (orch) {
+      const tasks = orch.getAllTasks()
+      const map = new Map<string, { stepName: string; total: number; success: number; failed: number }>()
+      for (const t of tasks) {
+        const e = map.get(t.stepName) ?? { stepName: t.stepName, total: 0, success: 0, failed: 0 }
+        e.total++
+        if (t.state === 'success') e.success++
+        if (t.state === 'failed')  e.failed++
+        map.set(t.stepName, e)
+      }
+      res.json({ steps: [...map.values()] })
+      return
+    }
+    res.json({ steps: await runPersistence.getStepStats(runId) })
+  })
+
   router.get('/:runId/tasks', async (req, res) => {
     const { runId } = req.params
-    const page   = Math.max(1,   parseInt(String(req.query.page   ?? '1'),   10))
-    const limit  = Math.min(500, parseInt(String(req.query.limit  ?? '100'), 10))
-    const status = req.query.status as string | undefined
+    const page     = Math.max(1,   parseInt(String(req.query.page   ?? '1'),   10))
+    const limit    = Math.min(500, parseInt(String(req.query.limit  ?? '100'), 10))
+    const status   = req.query.status   as string | undefined
+    const stepName = req.query.stepName as string | undefined
 
     const parserName = runner.findParserByRunId(runId)
     const orch = parserName ? runner.getOrchestrator(parserName) : undefined
     if (orch) {
-      const allTasks = orch.getAllTasks()
-      const filtered = status ? allTasks.filter((t) => t.state === status) : allTasks
-      res.json({ tasks: filtered.slice((page - 1) * limit, page * limit), total: filtered.length })
+      let allTasks = orch.getAllTasks()
+      if (status)   allTasks = allTasks.filter((t) => t.state === status)
+      if (stepName) allTasks = allTasks.filter((t) => t.stepName === stepName)
+      res.json({ tasks: allTasks.slice((page - 1) * limit, page * limit), total: allTasks.length })
       return
     }
-    res.json(await runPersistence.getRunTasks(runId, page, limit, status))
+    res.json(await runPersistence.getRunTasks(runId, page, limit, status, stepName))
   })
 
   router.get('/:runId/tasks/:taskId', async (req, res) => {

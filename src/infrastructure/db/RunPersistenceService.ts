@@ -1,5 +1,5 @@
 import { parserRuns, runTasks, taskResults, parsers } from './schema.js'
-import { eq, and, desc, sql, inArray } from 'drizzle-orm'
+import { eq, and, desc, sql, inArray, type SQL } from 'drizzle-orm'
 import { BasePersistenceService } from './BasePersistenceService.js'
 import type { PageTask } from '../../domain/entities/PageTask.js'
 import type { RunStats } from '../../domain/entities/ParserRun.js'
@@ -224,11 +224,13 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
     page: number,
     limit: number,
     status?: string,
+    stepName?: string,
   ): Promise<{ tasks: StoredTask[]; total: number }> {
     const offset = (page - 1) * limit
-    const conditions = status
-      ? and(eq(runTasks.runId, runId), eq(runTasks.state, status))
-      : eq(runTasks.runId, runId)
+    const clauses: SQL[] = [eq(runTasks.runId, runId)]
+    if (status)   clauses.push(eq(runTasks.state, status))
+    if (stepName) clauses.push(eq(runTasks.stepName, stepName))
+    const conditions = and(...clauses)
     const rows = await this.db.select().from(runTasks)
       .where(conditions)
       .limit(limit)
@@ -236,6 +238,19 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
     const [{ count }] = await this.db.select({ count: sql<number>`count(*)::int` })
       .from(runTasks).where(conditions)
     return { tasks: rows as StoredTask[], total: count }
+  }
+
+  async getStepStats(runId: string): Promise<{ stepName: string; total: number; success: number; failed: number }[]> {
+    return this.db
+      .select({
+        stepName: runTasks.stepName,
+        total:   sql<number>`count(*)::int`,
+        success: sql<number>`count(*) filter (where state = 'success')::int`,
+        failed:  sql<number>`count(*) filter (where state = 'failed')::int`,
+      })
+      .from(runTasks)
+      .where(eq(runTasks.runId, runId))
+      .groupBy(runTasks.stepName)
   }
 
   async loadLatestStoppedRunTasks(
