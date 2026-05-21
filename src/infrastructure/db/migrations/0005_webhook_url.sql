@@ -1,0 +1,1 @@
+ALTER TABLE parsers ADD COLUMN IF NOT EXISTS webhook_url TEXT;

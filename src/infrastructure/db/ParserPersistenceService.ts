@@ -1,6 +1,7 @@
 import { parsers as parsersTable, steps as stepsTable } from './schema.js'
 import { eq, and } from 'drizzle-orm'
 import { BasePersistenceService } from './BasePersistenceService.js'
+import type { StepVersionPersistenceService } from './StepVersionPersistenceService.js'
 
 export type ParserRow = typeof parsersTable.$inferSelect
 export type StepRow   = typeof stepsTable.$inferSelect
@@ -18,6 +19,7 @@ export interface CreateParserInput {
   retryConfig?: { maxRetries: number }
   deduplication?: boolean
   concurrentQuota?: number | null
+  webhookUrl?: string | null
 }
 
 export interface UpdateParserInput {
@@ -28,6 +30,7 @@ export interface UpdateParserInput {
   retryConfig?: { maxRetries: number }
   deduplication?: boolean
   concurrentQuota?: number | null
+  webhookUrl?: string | null
 }
 
 export interface CreateStepInput {
@@ -51,6 +54,9 @@ export interface UpdateStepInput {
 }
 
 export class ParserPersistenceService extends BasePersistenceService<ParserRow, CreateParserInput, UpdateParserInput> {
+  private versions: StepVersionPersistenceService | null = null
+
+  setVersionService(svc: StepVersionPersistenceService): void { this.versions = svc }
 
   // ── Abstract implementations ─────────────────────────────────────────────
 
@@ -65,6 +71,7 @@ export class ParserPersistenceService extends BasePersistenceService<ParserRow, 
         retryConfig:     input.retryConfig     ?? { maxRetries: 5 },
         deduplication:   input.deduplication   ?? true,
         concurrentQuota: input.concurrentQuota ?? null,
+        webhookUrl:      input.webhookUrl      ?? null,
       }).returning()
       return row
     } catch (err) {
@@ -87,6 +94,7 @@ export class ParserPersistenceService extends BasePersistenceService<ParserRow, 
       ...(input.retryConfig     !== undefined && { retryConfig:     input.retryConfig }),
       ...(input.deduplication   !== undefined && { deduplication:   input.deduplication }),
       ...(input.concurrentQuota !== undefined && { concurrentQuota: input.concurrentQuota }),
+      ...(input.webhookUrl      !== undefined && { webhookUrl:      input.webhookUrl }),
       updatedAt: new Date(),
     }).where(eq(parsersTable.id, id)).returning()
     return updated
@@ -107,6 +115,7 @@ export class ParserPersistenceService extends BasePersistenceService<ParserRow, 
     const [row] = await this.db.select().from(parsersTable).where(eq(parsersTable.name, name))
     return row ?? null
   }
+
 
   async getParserWithSteps(name: string): Promise<{ parser: ParserRow; steps: StepRow[] } | null> {
     const parser = await this.getParserByName(name)
@@ -153,6 +162,12 @@ export class ParserPersistenceService extends BasePersistenceService<ParserRow, 
 
   async updateStep(stepId: string, input: UpdateStepInput): Promise<StepRow> {
     try {
+      if (input.code !== undefined && this.versions) {
+        const [existing] = await this.db.select().from(stepsTable).where(eq(stepsTable.id, stepId))
+        if (existing && existing.code !== input.code && existing.code.trim().length > 0) {
+          await this.versions.save(stepId, existing.code).catch((e) => console.error('[step-version] save failed:', e))
+        }
+      }
       const [updated] = await this.db.update(stepsTable).set({
         ...(input.name         !== undefined && { name:         input.name }),
         ...(input.type         !== undefined && { type:         input.type }),

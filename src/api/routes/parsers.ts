@@ -13,6 +13,9 @@ import {
 } from '../../infrastructure/db/ParserPersistenceService.js'
 import { DebugStepRunner } from '../../application/use-cases/DebugStepRunner.js'
 import { broadcast, getClients, initSSE, writeSSE } from '../sse.js'
+import type { SchedulePersistenceService } from '../../infrastructure/db/SchedulePersistenceService.js'
+import { SchedulerService } from '../../application/services/SchedulerService.js'
+import type { StepVersionPersistenceService } from '../../infrastructure/db/StepVersionPersistenceService.js'
 
 interface Deps {
   runner: ParserRunnerService
@@ -20,9 +23,11 @@ interface Deps {
   parserService: ParserPersistenceService
   dbLoader: DbParserLoader
   outputDir: string
+  schedulePersistence: SchedulePersistenceService
+  stepVersionService: StepVersionPersistenceService
 }
 
-export function createParsersRouter({ runner, runPersistence, parserService, dbLoader, outputDir }: Deps) {
+export function createParsersRouter({ runner, runPersistence, parserService, dbLoader, outputDir, schedulePersistence, stepVersionService }: Deps) {
   const router = express.Router()
 
   router.param('id', async (_req, res, next, id: string) => {
@@ -36,6 +41,48 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
   })
 
   // ── Parser CRUD ─────────────────────────────────────────────────────────────
+
+  router.post('/import', async (req, res) => {
+    const { parser: incomingParser, steps: incomingSteps, newName } = req.body as {
+      parser: { name: string; entryUrl?: string; entryStep?: string; browserType?: string; browserSettings?: object; retryConfig?: { maxRetries: number }; deduplication?: boolean; concurrentQuota?: number | null }
+      steps: { name: string; type: 'traverser' | 'extractor'; entryUrl?: string; outputFile?: string | null; code?: string; stepSettings?: object; position?: number }[]
+      newName?: string
+    }
+    if (!incomingParser?.name) { res.status(400).json({ error: 'parser.name is required' }); return }
+    const name = newName ?? incomingParser.name
+    if (!/^[a-z0-9_-]+$/i.test(name)) { res.status(400).json({ error: 'name must be alphanumeric with hyphens/underscores' }); return }
+    try {
+      const created = await parserService.create({
+        name,
+        entryUrl: incomingParser.entryUrl,
+        entryStep: incomingParser.entryStep,
+        browserType: incomingParser.browserType,
+        browserSettings: incomingParser.browserSettings,
+        retryConfig: incomingParser.retryConfig,
+        deduplication: incomingParser.deduplication,
+        concurrentQuota: incomingParser.concurrentQuota ?? null,
+      })
+      for (const s of incomingSteps ?? []) {
+        await parserService.createStep({
+          parserId: created.id,
+          name: s.name,
+          type: s.type,
+          entryUrl: s.entryUrl,
+          outputFile: s.outputFile ?? null,
+          code: s.code,
+          position: s.position,
+        })
+        if (s.stepSettings) {
+          const step = await parserService.getStep(created.id, s.name)
+          if (step) await parserService.updateStep(step.id, { stepSettings: s.stepSettings })
+        }
+      }
+      res.status(201).json({ parser: created })
+    } catch (err) {
+      if (err instanceof ParserAlreadyExistsError) { res.status(409).json({ error: err.message }); return }
+      throw err
+    }
+  })
 
   router.get('/', async (req, res) => {
     const page   = Math.max(1,   parseInt(String(req.query.page   ?? '1'),  10) || 1)
@@ -114,14 +161,26 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
 
   router.put('/:id', async (req, res) => {
     const { id }: ParserRow = res.locals.parser
-    const { entryUrl, entryStep, browserType, browserSettings, retryConfig, deduplication, concurrentQuota } = req.body
-    const parser = await parserService.update(id, { entryUrl, entryStep, browserType, browserSettings, retryConfig, deduplication, concurrentQuota })
+    const { entryUrl, entryStep, browserType, browserSettings, retryConfig, deduplication, concurrentQuota, webhookUrl } = req.body
+    const parser = await parserService.update(id, { entryUrl, entryStep, browserType, browserSettings, retryConfig, deduplication, concurrentQuota, webhookUrl })
     res.json({ parser })
   })
 
   router.delete('/:id', async (_req, res) => {
     await parserService.delete((res.locals.parser as ParserRow).id)
     res.json({ ok: true })
+  })
+
+  // ── Export / Import ──────────────────────────────────────────────────────────
+
+  router.get('/:id/export', async (_req, res) => {
+    const { name }: ParserRow = res.locals.parser
+    const result = await parserService.getParserWithSteps(name)
+    if (!result) { res.status(404).json({ error: 'Parser not found' }); return }
+    const { id: _i, createdAt: _c, updatedAt: _u, ...parserData } = result.parser
+    const steps = result.steps.map(({ id: _si, parserId: _pi, createdAt: _sc, updatedAt: _su, ...rest }) => rest)
+    res.setHeader('Content-Disposition', `attachment; filename="${name}.parser.json"`)
+    res.json({ parser: parserData, steps })
   })
 
   // ── Run control ──────────────────────────────────────────────────────────────
@@ -171,6 +230,37 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
     res.json({ running: runner.isRunning(name), stats: runner.getStats(name) ?? null })
   })
 
+  // ── Schedule ─────────────────────────────────────────────────────────────────
+
+  router.get('/:id/schedule', async (_req, res) => {
+    const { id }: ParserRow = res.locals.parser
+    const row = await schedulePersistence.findByParserId(id)
+    res.json({ schedule: row ?? null })
+  })
+
+  router.put('/:id/schedule', async (req, res) => {
+    const { id }: ParserRow = res.locals.parser
+    const { cronExpression, enabled } = req.body as { cronExpression: string; enabled: boolean }
+    if (typeof cronExpression !== 'string' || !cronExpression.trim()) {
+      res.status(400).json({ error: 'cronExpression is required' }); return
+    }
+    const nextRunAt = SchedulerService.nextFireAt(cronExpression)
+    if (!nextRunAt) { res.status(400).json({ error: 'Invalid cron expression' }); return }
+    const row = await schedulePersistence.upsertForParser({
+      parserId:       id,
+      cronExpression,
+      enabled:        Boolean(enabled),
+      nextRunAt,
+    })
+    res.json({ schedule: row })
+  })
+
+  router.delete('/:id/schedule', async (_req, res) => {
+    const { id }: ParserRow = res.locals.parser
+    await schedulePersistence.deleteByParserId(id)
+    res.json({ ok: true })
+  })
+
   // ── SSE event stream ─────────────────────────────────────────────────────────
 
   router.get('/:id/events', async (req, res) => {
@@ -206,7 +296,7 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
             const entries = await readdir(subPath)
             await Promise.all(
               entries
-                .filter((f) => f.endsWith('.csv'))
+                .filter((f) => f.endsWith('.csv') || f.endsWith('.json') || f.endsWith('.xlsx'))
                 .map(async (f) => {
                   const s = await stat(resolve(subPath, f))
                   files.push({ name: f, runId: sub, size: s.size, mtime: s.mtime.toISOString() })
@@ -225,7 +315,8 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
   router.get('/:id/files/:runId/:file', (req, res) => {
     const { name }: ParserRow = res.locals.parser
     const { runId, file } = req.params
-    if (!file.endsWith('.csv') || file.includes('/') || file.includes('..') || runId.includes('/') || runId.includes('..')) {
+    const allowed = file.endsWith('.csv') || file.endsWith('.json') || file.endsWith('.xlsx')
+    if (!allowed || file.includes('/') || file.includes('..') || runId.includes('/') || runId.includes('..')) {
       res.status(400).json({ error: 'Invalid path' }); return
     }
     const safeDir = resolve(outputDir, name)
@@ -290,6 +381,24 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
     const deleted = await parserService.deleteStep(parserId, req.params.step)
     if (!deleted) { res.status(404).json({ error: `Step "${req.params.step}" not found` }); return }
     res.json({ ok: true })
+  })
+
+  router.get('/:id/steps/:step/versions', async (req, res) => {
+    const { id: parserId }: ParserRow = res.locals.parser
+    const step = await parserService.getStep(parserId, req.params.step)
+    if (!step) { res.status(404).json({ error: `Step "${req.params.step}" not found` }); return }
+    const rows = await stepVersionService.list(step.id, 20)
+    res.json({ versions: rows })
+  })
+
+  router.post('/:id/steps/:step/versions/:versionId/restore', async (req, res) => {
+    const { id: parserId }: ParserRow = res.locals.parser
+    const step = await parserService.getStep(parserId, req.params.step)
+    if (!step) { res.status(404).json({ error: `Step "${req.params.step}" not found` }); return }
+    const version = await stepVersionService.findById(req.params.versionId)
+    if (!version || version.stepId !== step.id) { res.status(404).json({ error: 'Version not found' }); return }
+    const updated = await parserService.updateStep(step.id, { code: version.code })
+    res.json({ step: updated })
   })
 
   // ── Step debug (SSE) ─────────────────────────────────────────────────────────

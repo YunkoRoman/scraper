@@ -17,7 +17,9 @@
   "dependencies": {
     "commander": "^12.1.0",
     "cors": "^2.8.6",
+    "cron-parser": "^5.5.0",
     "drizzle-orm": "^0.31.0",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "fast-csv": "^5.0.1",
     "pg": "^8.11.0",

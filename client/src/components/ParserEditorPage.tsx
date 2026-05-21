@@ -7,7 +7,10 @@ import { ParserSettingsPanel } from './ParserSettingsPanel'
 import { JsonEditor } from './JsonEditor'
 import { createParser, type CreateParserInput } from '../api'
 import { useSettings } from '../hooks/useSettings'
+import { registerPlaywrightCompletions } from '../lib/monacoPlaywrightCompletions'
+import { STEP_TEMPLATES } from '../lib/stepTemplates'
 import { AnimatePresence, motion } from 'framer-motion'
+import { StepVersionsPanel } from './StepVersionsPanel'
 import { SpringButton } from './motion/SpringButton'
 import { staggerItemVariants } from './motion/StaggerList'
 
@@ -133,6 +136,43 @@ function StepSettingsBar({
           />
         </div>
 
+        {/* Output Format */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500 font-medium">Output Format</label>
+          <select
+            key={String((settings as Record<string, unknown>).outputFormat ?? '')}
+            defaultValue={((settings as Record<string, unknown>).outputFormat as string) ?? 'csv'}
+            onChange={(e) => save({ outputFormat: e.target.value as 'csv' | 'json' | 'excel' })}
+            className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
+          >
+            <option value="csv">csv</option>
+            <option value="json">json</option>
+            <option value="excel">excel</option>
+          </select>
+        </div>
+
+        {/* Proxy Pool */}
+        <div className="flex flex-col gap-1 col-span-full">
+          <label className="text-xs text-gray-500 font-medium">
+            Proxy Pool <span className="font-normal text-gray-400">(one URL per line, round-robin)</span>
+          </label>
+          <textarea
+            key={Array.isArray((settings as Record<string, unknown>).proxyPool)
+              ? ((settings as Record<string, unknown>).proxyPool as string[]).join('\n')
+              : ''}
+            defaultValue={Array.isArray((settings as Record<string, unknown>).proxyPool)
+              ? ((settings as Record<string, unknown>).proxyPool as string[]).join('\n')
+              : ''}
+            onBlur={(e) => {
+              const list = e.target.value.split('\n').map((s: string) => s.trim()).filter(Boolean)
+              save({ proxyPool: list.length ? list : undefined })
+            }}
+            rows={3}
+            placeholder={'http://user:pass@host1:8080\nhttp://user:pass@host2:8080'}
+            className="text-xs px-2 py-1.5 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 font-mono"
+          />
+        </div>
+
         {/* Other settings JSON */}
         <div className="flex flex-col gap-1 flex-1 min-w-48">
           <label className="text-xs text-gray-500 font-medium">
@@ -185,6 +225,7 @@ export function ParserEditorPage({ parserId, onNavigateToParsers, onParserSelect
   const [showDebug, setShowDebug] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showStepSettings, setShowStepSettings] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
 
   const saveStatusLabel = saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : saveStatus === 'error' ? 'Save failed' : ''
 
@@ -514,7 +555,7 @@ export function ParserEditorPage({ parserId, onNavigateToParsers, onParserSelect
                 initial="hidden"
                 animate="show"
                 exit={{ opacity: 0, x: -16, transition: { duration: 0.18 } }}
-                onClick={() => selectStep(s.name)}
+                onClick={() => { setShowHistory(false); selectStep(s.name) }}
                 className={[
                   'group relative flex items-center justify-between px-3 py-2 cursor-pointer text-xs border-b border-gray-100 dark:border-gray-800',
                   selectedStepName === s.name
@@ -577,6 +618,23 @@ export function ParserEditorPage({ parserId, onNavigateToParsers, onParserSelect
                   </div>
                 )}
                 <div className="ml-auto flex items-center gap-2">
+                  <select
+                    onChange={(e) => {
+                      const t = STEP_TEMPLATES.find(tmpl => tmpl.label === e.target.value)
+                      if (t && confirm(`Replace current code with template "${t.label}"?`)) {
+                        handleCodeChange(t.code)
+                      }
+                      e.target.value = ''
+                    }}
+                    defaultValue=""
+                    className="px-2 py-0.5 text-xs rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
+                  >
+                    <option value="">Templates…</option>
+                    {STEP_TEMPLATES
+                      .filter(t => t.type === selectedStep.type)
+                      .map(t => <option key={t.label} value={t.label}>{t.label}</option>)
+                    }
+                  </select>
                   <button
                     onClick={() => setShowStepSettings((v) => !v)}
                     className={[
@@ -588,6 +646,13 @@ export function ParserEditorPage({ parserId, onNavigateToParsers, onParserSelect
                     title="Step settings"
                   >
                     ⚙
+                  </button>
+                  <button
+                    onClick={() => setShowHistory((v) => !v)}
+                    className="px-2 py-0.5 rounded text-xs text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                    title="Version history"
+                  >
+                    History
                   </button>
                   <button
                     onClick={() => setShowDebug((v) => !v)}
@@ -620,6 +685,7 @@ export function ParserEditorPage({ parserId, onNavigateToParsers, onParserSelect
                     theme={monacoTheme}
                     value={code}
                     onChange={(v) => handleCodeChange(v ?? '')}
+                    beforeMount={registerPlaywrightCompletions}
                     options={{
                       minimap: { enabled: false },
                       fontSize: 13,
@@ -648,6 +714,14 @@ export function ParserEditorPage({ parserId, onNavigateToParsers, onParserSelect
                     </motion.div>
                   )}
                 </AnimatePresence>
+                {showHistory && selectedStep && (
+                  <StepVersionsPanel
+                    parserId={parserId}
+                    stepName={selectedStep.name}
+                    onRestored={(code) => { handleCodeChange(code); setShowHistory(false) }}
+                    onClose={() => setShowHistory(false)}
+                  />
+                )}
               </div>
             </>
           ) : (

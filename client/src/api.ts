@@ -145,6 +145,7 @@ export interface ParserRow {
   retryConfig: { maxRetries: number }
   deduplication: boolean
   concurrentQuota: number | null
+  webhookUrl: string | null
   createdAt: string
   updatedAt: string
 }
@@ -182,6 +183,7 @@ export interface UpdateParserInput {
   retryConfig?: { maxRetries: number }
   deduplication?: boolean
   concurrentQuota?: number | null
+  webhookUrl?: string | null
 }
 
 export interface CreateStepInput {
@@ -353,4 +355,61 @@ export async function resumeParser(id: string): Promise<void> {
 
 export async function rerunParser(id: string): Promise<void> {
   await apiRequest(`/api/parsers/${id}/rerun`, { method: 'POST' })
+}
+
+export async function exportParser(id: string): Promise<{ parser: Record<string, unknown>; steps: Record<string, unknown>[] }> {
+  return apiRequest(`/api/parsers/${id}/export`)
+}
+
+export async function importParser(data: { parser: Record<string, unknown>; steps: Record<string, unknown>[]; newName?: string }): Promise<{ id: string; name: string }> {
+  const out = await apiRequest<{ parser: { id: string; name: string } }>('/api/parsers/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  return out.parser
+}
+
+export interface Schedule {
+  id: string
+  parserId: string
+  cronExpression: string
+  enabled: boolean
+  lastRunAt: string | null
+  nextRunAt: string | null
+}
+
+export async function getSchedule(parserId: string): Promise<Schedule | null> {
+  const r = await apiRequest<{ schedule: Schedule | null }>(`/api/parsers/${parserId}/schedule`)
+  return r.schedule
+}
+
+export async function setSchedule(parserId: string, cronExpression: string, enabled: boolean): Promise<Schedule> {
+  const r = await apiRequest<{ schedule: Schedule }>(`/api/parsers/${parserId}/schedule`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cronExpression, enabled }),
+  })
+  return r.schedule
+}
+
+export async function deleteSchedule(parserId: string): Promise<void> {
+  await apiRequest(`/api/parsers/${parserId}/schedule`, { method: 'DELETE' })
+}
+
+export interface StepVersion {
+  id: string
+  stepId: string
+  code: string
+  savedAt: string
+}
+
+export async function listStepVersions(parserId: string, stepName: string): Promise<StepVersion[]> {
+  const r = await apiRequest<{ versions: StepVersion[] }>(`/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}/versions`)
+  return r.versions
+}
+
+export async function restoreStepVersion(parserId: string, stepName: string, versionId: string): Promise<StepRow> {
+  const r = await apiRequest<{ step: StepRow }>(`/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}/versions/${versionId}/restore`, { method: 'POST' })
+  return r.step
 }

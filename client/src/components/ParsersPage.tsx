@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { listParsersSummary, startParser, stopParser, resumeParser, rerunParser, type ParserSummary } from '../api'
+import { listParsersSummary, startParser, stopParser, resumeParser, rerunParser, importParser, type ParserSummary } from '../api'
 import { useSettings } from '../hooks/useSettings'
 import { StatusDot } from './motion/StatusDot'
 import { SpringButton } from './motion/SpringButton'
@@ -62,6 +62,7 @@ export function ParsersPage({ onEdit, onViewParser }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [rowLoading, setRowLoading] = useState<Record<string, boolean>>({})
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetchData = useCallback(async () => {
     try {
@@ -178,6 +179,32 @@ export function ParsersPage({ onEdit, onViewParser }: Props) {
           </select>
         </div>
 
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0]
+            if (!file) return
+            try {
+              const text = await file.text()
+              const data = JSON.parse(text)
+              await importParser(data)
+              window.location.reload()
+            } catch (err) {
+              alert(`Import failed: ${(err as Error).message}`)
+            } finally {
+              e.target.value = ''
+            }
+          }}
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+        >
+          Import
+        </button>
         <SpringButton
           variant="primary"
           onClick={() => onEdit('')}

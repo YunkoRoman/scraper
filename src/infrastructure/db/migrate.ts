@@ -7,7 +7,7 @@ import { pool } from './client.js'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 async function migrate() {
-  const migrations = ['0001_init.sql', '0002_run_persistence.sql', '0003_task_html.sql']
+  const migrations = ['0001_init.sql', '0002_run_persistence.sql', '0003_task_html.sql', '0004_scheduled_runs.sql', '0004b_scheduled_runs_unique.sql', '0005_webhook_url.sql', '0006_step_versions.sql']
   for (const file of migrations) {
     const sql = await readFile(resolve(__dirname, 'migrations', file), 'utf8')
     await pool.query(sql)

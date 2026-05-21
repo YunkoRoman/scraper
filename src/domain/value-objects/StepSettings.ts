@@ -23,4 +23,6 @@ export interface StepSettings {
   initScripts?: string[]
   userAgent?: string
   proxySettings?: ProxySettings
+  proxyPool?: string[]
+  outputFormat?: 'csv' | 'json' | 'excel'
 }

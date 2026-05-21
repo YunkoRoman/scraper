@@ -186,6 +186,19 @@ export function ParserSettingsPanel({ parser, onSave }: Props) {
           </label>
         </div>
 
+        {/* Webhook URL */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500 font-medium">Webhook URL</label>
+          <input
+            type="url"
+            key={parser.webhookUrl ?? ''}
+            defaultValue={parser.webhookUrl ?? ''}
+            onBlur={(e) => onSave({ webhookUrl: e.target.value.trim() === '' ? null : e.target.value.trim() })}
+            placeholder="https://hooks.example.com/run-events"
+            className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-transparent w-full max-w-sm"
+          />
+        </div>
+
         {/* Browser Settings JSON */}
         <div className="flex flex-col gap-1 w-full max-w-lg">
           <div className="flex items-center gap-2">

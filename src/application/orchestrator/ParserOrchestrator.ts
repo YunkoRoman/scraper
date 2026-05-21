@@ -7,8 +7,8 @@ import { ParserRun, type RunStats } from '../../domain/entities/ParserRun.js'
 import type { PageTask } from '../../domain/entities/PageTask.js'
 import type { Step } from '../../domain/entities/Step.js'
 import { LinkDeduplicator } from '../../domain/services/LinkDeduplicator.js'
-import { CsvWriter } from '../../infrastructure/csv/CsvWriter.js'
 import { CsvPostProcessor } from '../../infrastructure/csv/CsvPostProcessor.js'
+import { createOutputWriter, resolveOutputFileName, type OutputWriter, type OutputFormat } from '../../infrastructure/export/OutputWriter.js'
 import type { WorkerOutMessage } from '../../infrastructure/worker/messages.js'
 import type { StepName } from '../../domain/value-objects/StepName.js'
 import { mkdir } from 'node:fs/promises'
@@ -21,7 +21,7 @@ const isTsx = __filename.endsWith('.ts')
 export class ParserOrchestrator extends EventEmitter {
   private run: ParserRun
   private workers = new Map<StepName, Worker>()
-  private csvWriters = new Map<string, CsvWriter>()
+  private csvWriters = new Map<string, OutputWriter>()
   private pendingWrites: Promise<void>[] = []
   private deduplicator: LinkDeduplicator
   private outputDir: string
@@ -229,7 +229,7 @@ export class ParserOrchestrator extends EventEmitter {
       }
       case 'DATA_EXTRACTED': {
         for (const row of msg.rows) {
-          this.writeCsvRow(msg.outputFile, row)
+          this.writeOutputRow(msg.outputFile, row)
         }
         this.emit('data_extracted', { taskId: msg.taskId, rows: msg.rows, task: this.run.getTask(msg.taskId) })
         break
@@ -321,10 +321,18 @@ export class ParserOrchestrator extends EventEmitter {
     }
   }
 
-  private writeCsvRow(outputFile: string, data: Record<string, unknown>): void {
-    const filePath = resolve(this.outputDir, outputFile)
+  private writeOutputRow(outputFile: string, data: Record<string, unknown>): void {
+    let format: OutputFormat = 'csv'
+    for (const [, step] of this.config.steps) {
+      const stepOutputFile = (step as { outputFile?: string }).outputFile
+      if (stepOutputFile === outputFile && step.settings?.outputFormat) {
+        format = step.settings.outputFormat as OutputFormat; break
+      }
+    }
+    const resolvedFile = resolveOutputFileName(outputFile, format)
+    const filePath = resolve(this.outputDir, resolvedFile)
     if (!this.csvWriters.has(filePath)) {
-      this.csvWriters.set(filePath, new CsvWriter(filePath))
+      this.csvWriters.set(filePath, createOutputWriter(format, filePath))
     }
     const p = this.csvWriters.get(filePath)!.write(data).catch(console.error) as Promise<void>
     this.pendingWrites.push(p)
@@ -350,6 +358,7 @@ export class ParserOrchestrator extends EventEmitter {
 
   private async runPostProcessing(): Promise<void> {
     for (const [filePath] of this.csvWriters) {
+      if (!filePath.endsWith('.csv')) { this.emit('postprocess', filePath); continue }
       const processor = new CsvPostProcessor(filePath)
       await processor.process()
       this.emit('postprocess', filePath)

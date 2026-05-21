@@ -3,6 +3,7 @@ import { parentPort, workerData } from 'node:worker_threads'
 import type { WorkerInMessage, WorkerOutMessage, WorkerData } from './messages.js'
 import { pipeConsole } from './pipeConsole.js'
 import { mergeWorkerSettings } from './mergeWorkerSettings.js'
+import { ProxyPoolService } from '../proxy/ProxyPoolService.js'
 import { createBrowserAdapter } from '../browser/BrowserAdapter.js'
 import type { BrowserAdapter } from '../browser/BrowserAdapter.js'
 import type { PageTask } from '../../domain/entities/PageTask.js'
@@ -20,6 +21,7 @@ const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let adapter: BrowserAdapter<any> = createBrowserAdapter()
+let proxyPool: ProxyPoolService = new ProxyPoolService([])
 let running = true
 let concurrency = 3
 let pageDelayMin = 0
@@ -41,7 +43,11 @@ function randomDelay(min: number, max: number): Promise<void> {
 async function rotateAdapter(): Promise<void> {
   console.log('[worker] Rotating browser context…')
   await adapter.close().catch(console.error)
-  adapter = createBrowserAdapter(savedSettings.browser_type, savedSettings)
+  const proxyUrl = proxyPool.next()
+  const settingsForLaunch = proxyUrl
+    ? { ...savedSettings, contextOptions: { ...(savedSettings.contextOptions ?? {}), proxy: { server: proxyUrl } } }
+    : savedSettings
+  adapter = createBrowserAdapter(savedSettings.browser_type, settingsForLaunch)
   await adapter.launch()
   if (savedSettings.initScripts?.length) {
     const pa = adapter as import('../browser/PlaywrightAdapter.js').PlaywrightAdapter
@@ -49,7 +55,8 @@ async function rotateAdapter(): Promise<void> {
       await pa.addInitScript(script)
     }
   }
-  console.log('[worker] Browser context rotated.')
+  if (proxyUrl) console.log(`[worker] Rotated to proxy: ${proxyUrl.replace(/:\/\/[^@]*@/, '://***@')}`)
+  else console.log('[worker] Browser context rotated.')
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -155,7 +162,12 @@ async function main() {
   pageDelayMax = mergedSettings.pageDelayMax ?? 0
   maxPagesPerContext = mergedSettings.maxPagesPerContext ?? 0
   savedSettings = mergedSettings
-  adapter = createBrowserAdapter(mergedSettings.browser_type, mergedSettings)
+  proxyPool = new ProxyPoolService((mergedSettings as { proxyPool?: string[] }).proxyPool ?? [])
+  const firstProxy = proxyPool.next()
+  const initialSettings = firstProxy
+    ? { ...mergedSettings, contextOptions: { ...(mergedSettings.contextOptions ?? {}), proxy: { server: firstProxy } } }
+    : mergedSettings
+  adapter = createBrowserAdapter(mergedSettings.browser_type, initialSettings)
   await adapter.launch()
   if (mergedSettings.initScripts?.length) {
     const pa = adapter as import('../browser/PlaywrightAdapter.js').PlaywrightAdapter

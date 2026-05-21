@@ -12,6 +12,7 @@ export const parsers = pgTable('parsers', {
   retryConfig: jsonb('retry_config').notNull().default({ maxRetries: 5 }),
   deduplication: boolean('deduplication').notNull().default(true),
   concurrentQuota: integer('concurrent_quota'),
+  webhookUrl: text('webhook_url'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
@@ -65,4 +66,21 @@ export const taskResults = pgTable('task_results', {
   taskId: uuid('task_id').primaryKey().references(() => runTasks.id, { onDelete: 'cascade' }),
   rows:   jsonb('rows').notNull().default([]),
   html:   text('html'),
+})
+
+export const scheduledRuns = pgTable('scheduled_runs', {
+  id:             uuid('id').primaryKey().defaultRandom(),
+  parserId:       uuid('parser_id').notNull().references(() => parsers.id, { onDelete: 'cascade' }).unique(),
+  cronExpression: text('cron_expression').notNull(),
+  enabled:        boolean('enabled').notNull().default(true),
+  lastRunAt:      timestamp('last_run_at', { withTimezone: true }),
+  nextRunAt:      timestamp('next_run_at', { withTimezone: true }),
+  createdAt:      timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const stepVersions = pgTable('step_versions', {
+  id:      uuid('id').primaryKey().defaultRandom(),
+  stepId:  uuid('step_id').notNull().references(() => steps.id, { onDelete: 'cascade' }),
+  code:    text('code').notNull(),
+  savedAt: timestamp('saved_at', { withTimezone: true }).notNull().defaultNow(),
 })

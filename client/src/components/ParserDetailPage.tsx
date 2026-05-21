@@ -9,11 +9,13 @@ import {
   startParser,
   stopParser,
   rerunParser,
+  exportParser,
   type ParserStats,
   type RunInfo,
   type OutputFile,
 } from '../api'
 import { SpringButton } from './motion/SpringButton'
+import { SchedulePanel } from './SchedulePanel'
 
 interface Props {
   parserId: string
@@ -227,6 +229,25 @@ export function ParserDetailPage({ parserId, onBack, onEdit, onViewJob }: Props)
               Run Now
             </SpringButton>
           )}
+          <button
+            onClick={async () => {
+              try {
+                const data = await exportParser(parserId)
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `${(data.parser as { name?: string }).name ?? 'parser'}.parser.json`
+                a.click()
+                URL.revokeObjectURL(url)
+              } catch (e) {
+                console.error('Export failed', e)
+              }
+            }}
+            className="px-3 py-1 text-xs rounded border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            Export
+          </button>
           <button
             onClick={() => onEdit(parserId)}
             className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -444,6 +465,10 @@ export function ParserDetailPage({ parserId, onBack, onEdit, onViewJob }: Props)
           </div>
         </div>
 
+      </div>
+
+      <div className="mt-4">
+        <SchedulePanel parserId={parserId} />
       </div>
     </div>
   )
