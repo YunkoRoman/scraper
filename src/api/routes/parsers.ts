@@ -50,7 +50,6 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
     }
     if (!incomingParser?.name) { res.status(400).json({ error: 'parser.name is required' }); return }
     const name = newName ?? incomingParser.name
-    if (!/^[a-z0-9_-]+$/i.test(name)) { res.status(400).json({ error: 'name must be alphanumeric with hyphens/underscores' }); return }
     try {
       const created = await parserService.create({
         name,
@@ -143,7 +142,6 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
       concurrentQuota?: number
     }
     if (!name) { res.status(400).json({ error: 'name is required' }); return }
-    if (!/^[a-z0-9_-]+$/i.test(name)) { res.status(400).json({ error: 'name must be alphanumeric with hyphens/underscores' }); return }
     try {
       const parser = await parserService.create({ name, entryUrl, entryStep, browserType, browserSettings, retryConfig, deduplication, concurrentQuota })
       res.status(201).json({ parser })
