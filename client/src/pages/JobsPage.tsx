@@ -1,20 +1,18 @@
 // client/src/components/JobsPage.tsx
 import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import { listJobs } from '../api'
 import type { RunInfo } from '../api'
 import { JOB_STATUS, UNKNOWN_STATUS } from '../design/status'
-import { StatusBadge } from './motion/StatusBadge'
-import { SpringButton } from './motion/SpringButton'
-import { FadeIn } from './motion/FadeIn'
-import { staggerItemVariants } from './motion/StaggerList'
+import { StatusBadge } from '../components/motion/StatusBadge'
+import { SpringButton } from '../components/motion/SpringButton'
+import { FadeIn } from '../components/motion/FadeIn'
+import { staggerItemVariants } from '../components/motion/StaggerList'
 import { useReducedMotion } from '../hooks/useReducedMotion'
 
-interface Props {
-  onViewJob: (runId: string) => void
-}
-
-export function JobsPage({ onViewJob }: Props) {
+export function JobsPage() {
+  const navigate = useNavigate()
   const [runs, setRuns] = useState<RunInfo[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -160,7 +158,7 @@ export function JobsPage({ onViewJob }: Props) {
                     <td className="px-4 py-3 text-right">
                       <SpringButton
                         variant="ghost"
-                        onClick={() => onViewJob(run.id)}
+                        onClick={() => navigate(`/jobs/${run.id}`)}
                         className="text-xs px-3 py-1.5 border border-gray-200 dark:border-gray-700 hover:border-emerald-400 dark:hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
                       >
                         View

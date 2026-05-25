@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
@@ -10,9 +11,6 @@ import {
   type RunInfo,
 } from '../api'
 
-interface Props {
-  onNavigate: (page: 'jobs' | 'parsers', param?: string) => void
-}
 
 function StatCard({
   label,
@@ -52,7 +50,8 @@ function isInitializing(run: RunInfo & { elapsed?: number }): boolean {
   return stats.inProgress > 0 && stats.success === 0
 }
 
-export function DashboardPage({ onNavigate }: Props) {
+export function DashboardPage() {
+  const navigate = useNavigate()
   const [totalParsers, setTotalParsers] = useState<number | null>(null)
   const [avgSuccessRate, setAvgSuccessRate] = useState<number | null>(null)
   const [perfDays, setPerfDays] = useState<DashboardPerformanceDay[]>([])
@@ -198,7 +197,7 @@ export function DashboardPage({ onNavigate }: Props) {
                 return (
                   <button
                     key={run.id}
-                    onClick={() => onNavigate('jobs', run.id)}
+                    onClick={() => navigate(`/jobs/${run.id}`)}
                     className="w-full text-left hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded-lg p-2 -mx-2 transition-colors"
                   >
                     <div className="flex items-center justify-between mb-1.5">

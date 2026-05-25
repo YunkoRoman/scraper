@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { listStepVersions, restoreStepVersion, type StepVersion } from '../api'
+import { listStepVersions, restoreStepVersion, type StepVersion } from '../../api'
 
 interface Props {
   parserId: string

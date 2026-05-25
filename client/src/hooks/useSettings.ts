@@ -7,6 +7,7 @@ export interface AppSettings {
   defaultRetryCount: number
   defaultConcurrentQuota: number | null
   defaultDeduplication: boolean
+  navCollapsed: boolean
 }
 
 const DEFAULTS: AppSettings = {
@@ -16,6 +17,7 @@ const DEFAULTS: AppSettings = {
   defaultRetryCount: 5,
   defaultConcurrentQuota: null,
   defaultDeduplication: true,
+  navCollapsed: false,
 }
 
 const KEY = 'app-settings'

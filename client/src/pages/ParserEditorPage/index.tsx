@@ -1,18 +1,20 @@
 // client/src/components/ParserEditorPage.tsx
 import { useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import Editor from '@monaco-editor/react'
-import { useParserEditor } from '../hooks/useParserEditor'
+import { useParserEditor } from '../../hooks/useParserEditor'
 import { StepDebugPanel } from './StepDebugPanel'
-import { ParserSettingsPanel } from './ParserSettingsPanel'
-import { JsonEditor } from './JsonEditor'
-import { createParser, type CreateParserInput } from '../api'
-import { useSettings } from '../hooks/useSettings'
-import { registerPlaywrightCompletions } from '../lib/monacoPlaywrightCompletions'
-import { STEP_TEMPLATES } from '../lib/stepTemplates'
+import { ParserSettingsModal } from './ParserSettingsModal'
+import { StepSettingsModal } from './StepSettingsModal'
+import { JsonEditor } from '../../components/JsonEditor'
+import { createParser, type CreateParserInput } from '../../api'
+import { useSettings } from '../../hooks/useSettings'
+import { registerPlaywrightCompletions } from '../../lib/monacoPlaywrightCompletions'
+import { STEP_TEMPLATES } from '../../lib/stepTemplates'
 import { AnimatePresence, motion } from 'framer-motion'
 import { StepVersionsPanel } from './StepVersionsPanel'
-import { SpringButton } from './motion/SpringButton'
-import { staggerItemVariants } from './motion/StaggerList'
+import { SpringButton } from '../../components/motion/SpringButton'
+import { staggerItemVariants } from '../../components/motion/StaggerList'
 
 const TRAVERSER_TEMPLATE = `// page: Playwright/Puppeteer Page
 // task: { url: string, parent_data?: Record<string, unknown> }
@@ -24,182 +26,10 @@ const EXTRACTOR_TEMPLATE = `// page: Playwright/Puppeteer Page
 const title = await page.$eval('h1', el => el.textContent?.trim() ?? '').catch(() => '')
 return [{ title, __url: task.url }]`
 
-function StepSettingsBar({
-  step,
-  onSave,
-}: {
-  step: import('../api').StepRow
-  onSave: (settings: Record<string, unknown>) => void
-}) {
-  const [json, setJson] = useState(
-    () => {
-      const { pageDelayMin: _a, pageDelayMax: _b, maxPagesPerContext: _c, ...rest } = step.stepSettings as Record<string, unknown>
-      return Object.keys(rest).length ? JSON.stringify(rest, null, 2) : ''
-    }
-  )
-
-  function dedicated(): Record<string, unknown> {
-    const { pageDelayMin, pageDelayMax, maxPagesPerContext } = step.stepSettings as Record<string, unknown>
-    return {
-      ...(pageDelayMin != null && { pageDelayMin }),
-      ...(pageDelayMax != null && { pageDelayMax }),
-      ...(maxPagesPerContext != null && { maxPagesPerContext }),
-    }
-  }
-
-  function save(patch: Record<string, unknown>) {
-    const base: Record<string, unknown> = {}
-    const s = json.trim()
-    if (s) {
-      try { Object.assign(base, JSON.parse(s)) } catch { /* invalid json, skip */ }
-    }
-    onSave({ ...dedicated(), ...base, ...patch })
-  }
-
-  function handleBlur() {
-    const s = json.trim()
-    if (!s) { onSave(dedicated()); return }
-    try {
-      onSave({ ...dedicated(), ...JSON.parse(s) })
-    } catch {
-      // JsonEditor shows the inline error; skip the save
-    }
-  }
-
-  const inputClass =
-    'text-xs px-2 py-1.5 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 ' +
-    'text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-emerald-400 w-24'
-
-  const settings = step.stepSettings as Record<string, unknown>
-
-  return (
-    <div className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/60 px-4 py-2">
-      <div className="flex flex-wrap gap-x-6 gap-y-2 items-start">
-
-        {/* Delay Min */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-gray-500 font-medium">
-            Delay Min <span className="font-normal text-gray-400">ms</span>
-          </label>
-          <input
-            type="number"
-            min={0}
-            step={500}
-            key={String(settings.pageDelayMin ?? '')}
-            defaultValue={settings.pageDelayMin != null ? Number(settings.pageDelayMin) : ''}
-            placeholder="0"
-            onBlur={(e) => {
-              const raw = e.target.value.trim()
-              save({ pageDelayMin: raw === '' ? undefined : parseInt(raw, 10) })
-            }}
-            className={inputClass}
-          />
-        </div>
-
-        {/* Delay Max */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-gray-500 font-medium">
-            Delay Max <span className="font-normal text-gray-400">ms</span>
-          </label>
-          <input
-            type="number"
-            min={0}
-            step={500}
-            key={String(settings.pageDelayMax ?? '')}
-            defaultValue={settings.pageDelayMax != null ? Number(settings.pageDelayMax) : ''}
-            placeholder="0"
-            onBlur={(e) => {
-              const raw = e.target.value.trim()
-              save({ pageDelayMax: raw === '' ? undefined : parseInt(raw, 10) })
-            }}
-            className={inputClass}
-          />
-        </div>
-
-        {/* Max Pages / Context */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-gray-500 font-medium">
-            Max Pages/Context <span className="font-normal text-gray-400">(0 = off)</span>
-          </label>
-          <input
-            type="number"
-            min={0}
-            step={1}
-            key={String(settings.maxPagesPerContext ?? '')}
-            defaultValue={settings.maxPagesPerContext != null ? Number(settings.maxPagesPerContext) : ''}
-            placeholder="0"
-            onBlur={(e) => {
-              const raw = e.target.value.trim()
-              save({ maxPagesPerContext: raw === '' ? undefined : parseInt(raw, 10) })
-            }}
-            className={inputClass}
-          />
-        </div>
-
-        {/* Output Format */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-gray-500 font-medium">Output Format</label>
-          <select
-            key={String((settings as Record<string, unknown>).outputFormat ?? '')}
-            defaultValue={((settings as Record<string, unknown>).outputFormat as string) ?? 'csv'}
-            onChange={(e) => save({ outputFormat: e.target.value as 'csv' | 'json' | 'excel' })}
-            className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
-          >
-            <option value="csv">csv</option>
-            <option value="json">json</option>
-            <option value="excel">excel</option>
-          </select>
-        </div>
-
-        {/* Proxy Pool */}
-        <div className="flex flex-col gap-1 col-span-full">
-          <label className="text-xs text-gray-500 font-medium">
-            Proxy Pool <span className="font-normal text-gray-400">(one URL per line, round-robin)</span>
-          </label>
-          <textarea
-            key={Array.isArray((settings as Record<string, unknown>).proxyPool)
-              ? ((settings as Record<string, unknown>).proxyPool as string[]).join('\n')
-              : ''}
-            defaultValue={Array.isArray((settings as Record<string, unknown>).proxyPool)
-              ? ((settings as Record<string, unknown>).proxyPool as string[]).join('\n')
-              : ''}
-            onBlur={(e) => {
-              const list = e.target.value.split('\n').map((s: string) => s.trim()).filter(Boolean)
-              save({ proxyPool: list.length ? list : undefined })
-            }}
-            rows={3}
-            placeholder={'http://user:pass@host1:8080\nhttp://user:pass@host2:8080'}
-            className="text-xs px-2 py-1.5 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 font-mono"
-          />
-        </div>
-
-        {/* Other settings JSON */}
-        <div className="flex flex-col gap-1 flex-1 min-w-48">
-          <label className="text-xs text-gray-500 font-medium">
-            Step Settings{' '}
-            <span className="font-normal text-gray-400">(concurrency, userAgent, initScripts…)</span>
-          </label>
-          <JsonEditor
-            value={json}
-            onChange={setJson}
-            onBlur={handleBlur}
-            rows={3}
-            placeholder={'{\n  "concurrency": 3\n}'}
-          />
-        </div>
-
-      </div>
-    </div>
-  )
-}
-
-interface Props {
-  parserId: string
-  onNavigateToParsers: () => void
-  onParserSelect: (id: string) => void
-}
-
-export function ParserEditorPage({ parserId, onNavigateToParsers, onParserSelect }: Props) {
+export function ParserEditorPage() {
+  const navigate = useNavigate()
+  const { parserId: parserIdParam } = useParams<{ parserId: string }>()
+  const parserId = parserIdParam ?? ''
   const { settings } = useSettings()
   const monacoTheme = settings.theme === 'dark' || (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'vs-dark' : 'light'
 
@@ -258,7 +88,7 @@ export function ParserEditorPage({ parserId, onNavigateToParsers, onParserSelect
           concurrentQuota: newParserQuota ? parseInt(newParserQuota, 10) : null,
           browserSettings,
         } satisfies CreateParserInput)
-        onParserSelect(p.id)
+        navigate(`/editor/${p.id}`)
       } catch (e) {
         setCreateError((e as Error).message)
       } finally {
@@ -376,7 +206,7 @@ export function ParserEditorPage({ parserId, onNavigateToParsers, onParserSelect
           {/* Actions */}
           <motion.div variants={staggerItemVariants} className="flex gap-2 pt-1">
             <button
-              onClick={onNavigateToParsers}
+              onClick={() => navigate('/parsers')}
               className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
               Cancel
@@ -403,65 +233,28 @@ export function ParserEditorPage({ parserId, onNavigateToParsers, onParserSelect
     return (
       <div className="px-8 py-8">
         <p className="text-red-500">{error}</p>
-        <button onClick={onNavigateToParsers} className="mt-4 text-sm text-emerald-600 hover:underline">← Back to parsers</button>
+        <button onClick={() => navigate('/parsers')} className="mt-4 text-sm text-emerald-600 hover:underline">← Back to parsers</button>
       </div>
     )
   }
 
   return (
     <div className="flex flex-col h-full">
-      {/* Parser header bar */}
-      <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-2 flex items-center gap-4 flex-wrap">
-        <button onClick={onNavigateToParsers} className="text-sm text-gray-500 hover:text-gray-900 dark:hover:text-white">←</button>
-        <span className="font-semibold text-sm">{parser?.name}</span>
-
-        <div className="flex items-center gap-2 ml-2">
-          <label className="text-xs text-gray-500">Entry URL</label>
+      {/* Header row 1: name + entry URL + actions */}
+      <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-2 flex items-center gap-4">
+        <button onClick={() => navigate(`/parsers/${parserId}`)} className="text-sm text-gray-400 hover:text-gray-900 dark:hover:text-white shrink-0">←</button>
+        <span className="font-bold text-sm shrink-0">{parser?.name}</span>
+        <div className="flex items-center gap-2 flex-1 mx-2">
+          <label className="text-xs text-gray-500 shrink-0">Entry URL</label>
           <input
+            key={parser?.entryUrl ?? ''}
             defaultValue={parser?.entryUrl ?? ''}
             onBlur={(e) => saveParserSettings({ entryUrl: e.target.value })}
-            className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-transparent w-48"
             placeholder="https://..."
+            className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-transparent flex-1 focus:outline-none focus:ring-1 focus:ring-emerald-400 text-gray-900 dark:text-gray-100"
           />
         </div>
-
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-500">Entry Step</label>
-          <select
-            value={parser?.entryStep ?? ''}
-            onChange={(e) => saveParserSettings({ entryStep: e.target.value })}
-            className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
-          >
-            {steps.length === 0 && <option value="">— none —</option>}
-            {steps.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
-          </select>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-500">Browser</label>
-          <select
-            value={parser?.browserType ?? 'playwright'}
-            onChange={(e) => saveParserSettings({ browserType: e.target.value })}
-            className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
-          >
-            <option value="playwright">Playwright</option>
-            <option value="playwright-stealth">Playwright Stealth</option>
-            <option value="puppeteer">Puppeteer</option>
-          </select>
-        </div>
-
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={() => setShowSettings((v) => !v)}
-            className={[
-              'px-2.5 py-1 text-xs rounded font-medium transition-colors',
-              showSettings
-                ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
-                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800',
-            ].join(' ')}
-          >
-            ⚙ Settings
-          </button>
+        <div className="flex items-center gap-2 shrink-0">
           <AnimatePresence mode="wait">
             {saveStatusLabel && (
               <motion.span
@@ -477,20 +270,61 @@ export function ParserEditorPage({ parserId, onNavigateToParsers, onParserSelect
             )}
           </AnimatePresence>
           <SpringButton
-            variant="primary"
+            variant="success"
             onClick={saveNow}
             loading={saveStatus === 'saving'}
             className="px-3 py-1 text-xs"
           >
             Save
           </SpringButton>
+          <SpringButton
+            variant="primary"
+            onClick={() => setShowDebug((v) => !v)}
+            disabled={!selectedStep}
+            className="px-3 py-1 text-xs"
+          >
+            ▷ Run
+          </SpringButton>
         </div>
       </div>
 
-      {/* Parser settings panel */}
-      {showSettings && parser && (
-        <ParserSettingsPanel parser={parser} onSave={saveParserSettings} />
-      )}
+      {/* Header row 2: settings buttons */}
+      <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-1.5 flex items-center justify-end gap-2">
+        <button
+          onClick={() => setShowSettings((v) => !v)}
+          className={[
+            'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors',
+            showSettings
+              ? 'border-gray-400 dark:border-gray-500 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+              : 'border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800',
+          ].join(' ')}
+        >
+          ⚙ General &amp; Browser Settings
+        </button>
+        <button
+          onClick={() => setShowStepSettings((v) => !v)}
+          disabled={!selectedStep}
+          className={[
+            'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors disabled:opacity-40',
+            showStepSettings
+              ? 'border-gray-400 dark:border-gray-500 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+              : 'border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800',
+          ].join(' ')}
+        >
+          ≡ Step Settings
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {showSettings && parser && (
+          <ParserSettingsModal
+            parser={parser}
+            steps={steps}
+            onSave={saveParserSettings}
+            onClose={() => setShowSettings(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Two-panel body */}
       <div className="flex flex-1 overflow-hidden">
@@ -592,31 +426,9 @@ export function ParserEditorPage({ parserId, onNavigateToParsers, onParserSelect
           {selectedStep ? (
             <>
               {/* Step meta bar */}
-              <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-1.5 flex items-center gap-3 text-xs text-gray-500 flex-wrap">
+              <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-1.5 flex items-center gap-3 text-xs text-gray-500">
                 <span className="font-medium text-gray-700 dark:text-gray-300">{selectedStep.name}</span>
                 <span className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800">{selectedStep.type}</span>
-                <div className="flex items-center gap-1.5">
-                  <span>Entry URL:</span>
-                  <input
-                    key={selectedStep.name}
-                    defaultValue={selectedStep.entryUrl}
-                    onBlur={(e) => saveStepMeta(selectedStep.name, { entryUrl: e.target.value })}
-                    className="px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-700 bg-transparent w-56"
-                    placeholder="https://..."
-                  />
-                </div>
-                {selectedStep.type === 'extractor' && (
-                  <div className="flex items-center gap-1.5">
-                    <span>Output:</span>
-                    <input
-                      key={`out-${selectedStep.name}`}
-                      defaultValue={selectedStep.outputFile ?? ''}
-                      onBlur={(e) => saveStepMeta(selectedStep.name, { outputFile: e.target.value })}
-                      className="px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-700 bg-transparent w-32"
-                      placeholder="output.csv"
-                    />
-                  </div>
-                )}
                 <div className="ml-auto flex items-center gap-2">
                   <select
                     onChange={(e) => {
@@ -636,46 +448,24 @@ export function ParserEditorPage({ parserId, onNavigateToParsers, onParserSelect
                     }
                   </select>
                   <button
-                    onClick={() => setShowStepSettings((v) => !v)}
-                    className={[
-                      'px-2 py-0.5 rounded text-xs transition-colors',
-                      showStepSettings
-                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
-                        : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
-                    ].join(' ')}
-                    title="Step settings"
-                  >
-                    ⚙
-                  </button>
-                  <button
                     onClick={() => setShowHistory((v) => !v)}
                     className="px-2 py-0.5 rounded text-xs text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                    title="Version history"
                   >
                     History
-                  </button>
-                  <button
-                    onClick={() => setShowDebug((v) => !v)}
-                    className={[
-                      'px-2.5 py-1 rounded text-xs font-semibold transition-colors',
-                      showDebug
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-emerald-100 dark:hover:bg-emerald-900 hover:text-emerald-700 dark:hover:text-emerald-300',
-                    ].join(' ')}
-                  >
-                    ▶ Run
                   </button>
                 </div>
               </div>
 
-              {/* Step settings JSON */}
-              {showStepSettings && (
-                <StepSettingsBar
-                  key={selectedStep.name}
-                  step={selectedStep}
-                  onSave={(settings) => saveStepMeta(selectedStep.name, { stepSettings: settings })}
-                />
-              )}
+              <AnimatePresence>
+                {showStepSettings && (
+                  <StepSettingsModal
+                    key={selectedStep.name}
+                    step={selectedStep}
+                    onSave={(meta) => saveStepMeta(selectedStep.name, meta)}
+                    onClose={() => setShowStepSettings(false)}
+                  />
+                )}
+              </AnimatePresence>
               <div className="relative flex flex-1 overflow-hidden min-h-0">
                 <div className="flex-1 overflow-hidden min-w-0">
                   <Editor
@@ -686,6 +476,15 @@ export function ParserEditorPage({ parserId, onNavigateToParsers, onParserSelect
                     value={code}
                     onChange={(v) => handleCodeChange(v ?? '')}
                     beforeMount={registerPlaywrightCompletions}
+                    onMount={(editor) => {
+                      editor.getDomNode()?.addEventListener('keydown', (e: KeyboardEvent) => {
+                        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          editor.getAction('editor.action.formatDocument')?.run()
+                        }
+                      }, { capture: true })
+                    }}
                     options={{
                       minimap: { enabled: false },
                       fontSize: 13,

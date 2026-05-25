@@ -1,22 +1,20 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { getJob, getJobTasks, getJobStepStats, stopJob, resumeJob, retryTask, retryAllFailed } from '../api'
-import type { RunInfo, TaskRow, StepStat } from '../api'
-import { TASK_STATE, UNKNOWN_STATUS } from '../design/status'
-import { StatusBadge } from './motion/StatusBadge'
-import { SpringButton } from './motion/SpringButton'
-import { FadeIn } from './motion/FadeIn'
-import { staggerItemVariants } from './motion/StaggerList'
-import { useReducedMotion } from '../hooks/useReducedMotion'
+import { useNavigate, useParams } from 'react-router-dom'
+import { getJob, getJobTasks, getJobStepStats, stopJob, resumeJob, retryTask, retryAllFailed } from '../../api'
+import type { RunInfo, TaskRow, StepStat } from '../../api'
+import { TASK_STATE, UNKNOWN_STATUS } from '../../design/status'
+import { StatusBadge } from '../../components/motion/StatusBadge'
+import { SpringButton } from '../../components/motion/SpringButton'
+import { FadeIn } from '../../components/motion/FadeIn'
+import { staggerItemVariants } from '../../components/motion/StaggerList'
+import { useReducedMotion } from '../../hooks/useReducedMotion'
 import { JobInsightsPanel } from './JobInsightsPanel'
 
-interface Props {
-  runId: string
-  onBack: () => void
-  onViewTask: (taskId: string) => void
-}
-
-export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
+export function JobDetailPage() {
+  const navigate = useNavigate()
+  const { runId: runIdParam } = useParams<{ runId: string }>()
+  const runId = runIdParam!
   const [run, setRun] = useState<RunInfo | null>(null)
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [total, setTotal] = useState(0)
@@ -120,7 +118,7 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <motion.button
-              onClick={onBack}
+              onClick={() => navigate('/jobs')}
               whileHover={{ x: -3 }}
               transition={{ type: 'spring', stiffness: 380, damping: 30 }}
               className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-xl leading-none font-bold"
@@ -312,7 +310,7 @@ export function JobDetailPage({ runId, onBack, onViewTask }: Props) {
                               </button>
                             )}
                             <button
-                              onClick={() => onViewTask(task.id)}
+                              onClick={() => navigate(`/jobs/${runId}/tasks/${task.id}`)}
                               className="text-xs px-3 py-1 rounded-lg border border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 font-medium transition-colors"
                             >
                               View Details

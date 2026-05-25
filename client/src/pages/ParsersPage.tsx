@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { listParsersSummary, startParser, stopParser, resumeParser, rerunParser, importParser, type ParserSummary } from '../api'
 import { useSettings } from '../hooks/useSettings'
-import { StatusDot } from './motion/StatusDot'
-import { SpringButton } from './motion/SpringButton'
+import { StatusDot } from '../components/motion/StatusDot'
+import { SpringButton } from '../components/motion/SpringButton'
 import { PARSER_STATUS, UNKNOWN_STATUS } from '../design/status'
-
-interface Props {
-  onEdit: (id: string) => void
-  onViewParser: (id: string) => void
-}
 
 type SortCol = 'name' | 'successRate' | 'lastRunDate'
 type SortDir = 'asc' | 'desc'
@@ -47,7 +43,8 @@ function SortableHeader({
   )
 }
 
-export function ParsersPage({ onEdit, onViewParser }: Props) {
+export function ParsersPage() {
+  const navigate = useNavigate()
   const { settings } = useSettings()
   const [page, setPage] = useState(1)
   const limit = settings.pageLimit
@@ -207,7 +204,7 @@ export function ParsersPage({ onEdit, onViewParser }: Props) {
         </button>
         <SpringButton
           variant="primary"
-          onClick={() => onEdit('')}
+          onClick={() => navigate('/editor')}
           className="px-3 py-1.5 text-sm shrink-0"
         >
           + New Parser
@@ -262,7 +259,7 @@ export function ParsersPage({ onEdit, onViewParser }: Props) {
                   </td>
                   <td className="px-4 py-3">
                     <button
-                      onClick={() => onViewParser(parser.id)}
+                      onClick={() => navigate(`/parsers/${parser.id}`)}
                       className="text-sm font-medium text-gray-900 dark:text-white hover:text-emerald-600 dark:hover:text-emerald-400 hover:underline transition-colors text-left"
                     >
                       {parser.name}
@@ -295,7 +292,7 @@ export function ParsersPage({ onEdit, onViewParser }: Props) {
                         </SpringButton>
                       )}
                       <button
-                        onClick={() => onEdit(parser.id)}
+                        onClick={() => navigate(`/editor/${parser.id}`)}
                         className="text-xs px-3 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors"
                       >
                         Edit

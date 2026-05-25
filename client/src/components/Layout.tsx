@@ -1,11 +1,17 @@
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useSettings } from '../hooks/useSettings'
 
 export type NavPage = 'dashboard' | 'parsers' | 'jobs' | 'settings'
 
 interface Props {
-  activePage: NavPage
-  onNavigate: (page: NavPage) => void
   children: React.ReactNode
+}
+
+const NAV_ROUTES: Record<NavPage, string> = {
+  dashboard: '/',
+  parsers: '/parsers',
+  jobs: '/jobs',
+  settings: '/settings',
 }
 
 function DashboardIcon() {
@@ -78,8 +84,17 @@ const NAV: { id: NavPage; label: string; icon: React.ReactElement }[] = [
   { id: 'settings',  label: 'Settings',  icon: <SettingsIcon /> },
 ]
 
-export function Layout({ activePage, onNavigate, children }: Props) {
+export function Layout({ children }: Props) {
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
   const { settings, updateSettings } = useSettings()
+  const collapsed = settings.navCollapsed
+
+  const activePage: NavPage =
+    pathname.startsWith('/parsers') || pathname.startsWith('/editor') ? 'parsers'
+    : pathname.startsWith('/jobs') ? 'jobs'
+    : pathname.startsWith('/settings') ? 'settings'
+    : 'dashboard'
 
   function cycleTheme() {
     const next =
@@ -97,15 +112,23 @@ export function Layout({ activePage, onNavigate, children }: Props) {
   return (
     <div className="h-screen flex overflow-hidden bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white transition-colors duration-200">
       {/* Sidebar */}
-      <aside className="w-[220px] shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+      <aside className={[
+        'shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 transition-all duration-200',
+        collapsed ? 'w-[48px]' : 'w-[220px]',
+      ].join(' ')}>
         {/* Logo */}
-        <div className="flex items-center gap-2.5 px-4 h-14 border-b border-gray-200 dark:border-gray-800 shrink-0">
+        <div className={[
+          'flex items-center h-14 border-b border-gray-200 dark:border-gray-800 shrink-0 overflow-hidden',
+          collapsed ? 'justify-center px-0' : 'gap-2.5 px-4',
+        ].join(' ')}>
           <div className="w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center shrink-0">
             <BoltIcon />
           </div>
-          <span className="font-extrabold text-base tracking-tight text-gray-900 dark:text-white">
-            Parser
-          </span>
+          {!collapsed && (
+            <span className="font-extrabold text-base tracking-tight text-gray-900 dark:text-white">
+              Parser
+            </span>
+          )}
         </div>
 
         {/* Nav items */}
@@ -113,16 +136,18 @@ export function Layout({ activePage, onNavigate, children }: Props) {
           {NAV.map((item) => (
             <button
               key={item.id}
-              onClick={() => onNavigate(item.id)}
+              onClick={() => navigate(NAV_ROUTES[item.id])}
+              title={collapsed ? item.label : undefined}
               className={[
                 'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                collapsed ? 'justify-center' : '',
                 activePage === item.id
                   ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white',
               ].join(' ')}
             >
               {item.icon}
-              {item.label}
+              {!collapsed && item.label}
             </button>
           ))}
         </nav>
@@ -131,11 +156,26 @@ export function Layout({ activePage, onNavigate, children }: Props) {
         <div className="px-3 py-3 border-t border-gray-200 dark:border-gray-800 shrink-0">
           <button
             onClick={cycleTheme}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors"
-            title={`Theme: ${settings.theme}`}
+            title={collapsed ? `Theme: ${settings.theme}` : undefined}
+            className={[
+              'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400',
+              'hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors',
+              collapsed ? 'justify-center' : '',
+            ].join(' ')}
           >
             <ThemeIcon />
-            <span className="capitalize">{settings.theme}</span>
+            {!collapsed && <span className="capitalize">{settings.theme}</span>}
+          </button>
+        </div>
+
+        {/* Collapse toggle */}
+        <div className="px-3 pb-3 shrink-0">
+          <button
+            onClick={() => updateSettings({ navCollapsed: !collapsed })}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="w-full flex items-center justify-center px-3 py-2 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors"
+          >
+            {collapsed ? '›' : '‹'}
           </button>
         </div>
       </aside>

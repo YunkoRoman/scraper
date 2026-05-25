@@ -2,12 +2,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { listParsersSummary, listSteps, getStep } from '../api'
 import type { StepInfo } from '../api'
-import { JsonEditor } from './JsonEditor'
+import { JsonEditor } from '../components/JsonEditor'
 import { useDebugRun } from '../hooks/useDebugRun'
 import type { DebugResult } from '../hooks/useDebugRun'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FadeIn } from './motion/FadeIn'
-import { SpringButton } from './motion/SpringButton'
+import { FadeIn } from '../components/motion/FadeIn'
+import { SpringButton } from '../components/motion/SpringButton'
 
 function parseJsonSafe(s: string): Record<string, unknown> | undefined {
   if (!s.trim()) return undefined

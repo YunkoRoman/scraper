@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getSchedule, setSchedule, deleteSchedule, type Schedule } from '../api'
+import { getSchedule, setSchedule, deleteSchedule, type Schedule } from '../../api'
 
 interface Props { parserId: string }
 

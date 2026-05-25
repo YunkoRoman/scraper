@@ -1,22 +1,21 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
+import { useNavigate, useParams } from 'react-router-dom'
 import { getJob, getTask, getTaskResult, retryTask, abortTask } from '../api'
 import type { RunInfo, TaskRow } from '../api'
 import { TASK_STATE, UNKNOWN_STATUS } from '../design/status'
-import { StatusBadge } from './motion/StatusBadge'
-import { SpringButton } from './motion/SpringButton'
-import { FadeIn } from './motion/FadeIn'
-import { MotionCard } from './motion/MotionCard'
+import { StatusBadge } from '../components/motion/StatusBadge'
+import { SpringButton } from '../components/motion/SpringButton'
+import { FadeIn } from '../components/motion/FadeIn'
+import { MotionCard } from '../components/motion/MotionCard'
 
 const TERMINAL = new Set(['success', 'failed', 'aborted'])
 
-interface Props {
-  runId: string
-  taskId: string
-  onBack: () => void
-}
-
-export function TaskDetailPage({ runId, taskId, onBack }: Props) {
+export function TaskDetailPage() {
+  const navigate = useNavigate()
+  const { runId: runIdParam, taskId: taskIdParam } = useParams<{ runId: string; taskId: string }>()
+  const runId = runIdParam!
+  const taskId = taskIdParam!
   const [run, setRun] = useState<RunInfo | null>(null)
   const [task, setTask] = useState<TaskRow | null>(null)
   const [taskResult, setTaskResult] = useState<Record<string, unknown>[] | null>(null)
@@ -89,7 +88,7 @@ export function TaskDetailPage({ runId, taskId, onBack }: Props) {
     <FadeIn as="div" className="px-4 sm:px-6 lg:px-8 py-6 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <motion.button
-          onClick={onBack}
+          onClick={() => navigate(`/jobs/${runId}`)}
           whileHover={{ x: -3 }}
           transition={{ type: 'spring', stiffness: 380, damping: 30 }}
           className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-xl leading-none font-bold"

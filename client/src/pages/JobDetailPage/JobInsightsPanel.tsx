@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import type { RunStats, StepStat } from '../api'
+import type { RunStats, StepStat } from '../../api'
 
 interface Props {
   stats:     RunStats

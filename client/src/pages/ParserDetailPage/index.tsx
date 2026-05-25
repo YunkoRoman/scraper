@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   getParser,
   getParserStats,
@@ -13,16 +14,10 @@ import {
   type ParserStats,
   type RunInfo,
   type OutputFile,
-} from '../api'
-import { SpringButton } from './motion/SpringButton'
+} from '../../api'
+import { SpringButton } from '../../components/motion/SpringButton'
 import { SchedulePanel } from './SchedulePanel'
 
-interface Props {
-  parserId: string
-  onBack: () => void
-  onEdit: (id: string) => void
-  onViewJob: (runId: string) => void
-}
 
 function formatDuration(seconds: number | null): string {
   if (seconds === null) return '—'
@@ -103,7 +98,10 @@ function StatCard({ label, value, icon }: { label: string; value: string | numbe
 
 const RUNS_PER_PAGE = 5
 
-export function ParserDetailPage({ parserId, onBack, onEdit, onViewJob }: Props) {
+export function ParserDetailPage() {
+  const navigate = useNavigate()
+  const { parserId: parserIdParam } = useParams<{ parserId: string }>()
+  const parserId = parserIdParam!
   const [parserName, setParserName] = useState<string | null>(null)
   const [stats, setStats] = useState<ParserStats | null>(null)
   const [runs, setRuns] = useState<RunInfo[]>([])
@@ -195,7 +193,7 @@ export function ParserDetailPage({ parserId, onBack, onEdit, onViewJob }: Props)
   return (
     <div className="px-6 py-6">
       <button
-        onClick={onBack}
+        onClick={() => navigate('/parsers')}
         className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors mb-5"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -249,7 +247,7 @@ export function ParserDetailPage({ parserId, onBack, onEdit, onViewJob }: Props)
             Export
           </button>
           <button
-            onClick={() => onEdit(parserId)}
+            onClick={() => navigate(`/editor/${parserId}`)}
             className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -319,7 +317,7 @@ export function ParserDetailPage({ parserId, onBack, onEdit, onViewJob }: Props)
                 {runs.map((run) => (
                   <tr
                     key={run.id}
-                    onClick={() => onViewJob(run.id)}
+                    onClick={() => navigate(`/jobs/${run.id}`)}
                     className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors cursor-pointer"
                   >
                     <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">

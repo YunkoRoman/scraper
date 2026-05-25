@@ -3,10 +3,10 @@ import { useEffect, useRef, useState } from 'react'
 import ReactJsonModule from 'react-json-view'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ReactJson = (ReactJsonModule as any).default || ReactJsonModule
-import { useDebugRun } from '../hooks/useDebugRun'
-import { JsonEditor } from './JsonEditor'
+import { useDebugRun } from '../../hooks/useDebugRun'
+import { JsonEditor } from '../../components/JsonEditor'
 import { motion, AnimatePresence } from 'framer-motion'
-import { SpringButton } from './motion/SpringButton'
+import { SpringButton } from '../../components/motion/SpringButton'
 
 function parseJsonSafe(s: string): Record<string, unknown> | undefined {
   if (!s.trim()) return undefined
@@ -178,7 +178,7 @@ export function StepDebugPanel({ parserId, stepName, initialUrl, onClose }: Prop
           {result.type === 'links' ? (
             <>
               <p className="text-xs text-gray-400 mb-1.5 font-medium">
-                Links discovered ({result.items.length})
+                Links discovered ({result.items?.length})
               </p>
               <pre className="text-xs text-emerald-400 whitespace-pre-wrap break-all">
                 {JSON.stringify(result.items, null, 2)}
