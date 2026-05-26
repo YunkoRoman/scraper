@@ -3,6 +3,7 @@ import { eq, and, desc, sql, inArray, type SQL } from 'drizzle-orm'
 import { BasePersistenceService } from './BasePersistenceService.js'
 import type { PageTask } from '../../domain/entities/PageTask.js'
 import type { RunStats } from '../../domain/entities/ParserRun.js'
+import { TaskWriteBuffer, type TaskSink } from './TaskWriteBuffer.js'
 
 export interface ParserStats {
   totalRuns: number
@@ -58,6 +59,25 @@ const MAX_RESUME_TASKS = 10_000
 
 export class RunPersistenceService extends BasePersistenceService<RunInfo, CreateRunInput, UpdateRunStatusInput> {
 
+  private readonly writeBuffer: TaskWriteBuffer = new TaskWriteBuffer(this.makeSink())
+
+  private makeSink(): TaskSink {
+    return {
+      flushTaskBatch: async (batch) => {
+        for (const { runId, tasks } of batch) {
+          await this._bulkUpsertTasks(runId, tasks)
+        }
+      },
+      flushResultBatch: async (batch) => {
+        await this._bulkSaveResults(batch)
+      },
+    }
+  }
+
+  async flushPendingWrites(): Promise<void> {
+    await this.writeBuffer.flush()
+  }
+
   // ── Abstract implementations ─────────────────────────────────────────────
 
   async create(input: CreateRunInput): Promise<RunInfo> {
@@ -95,11 +115,13 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
   }
 
   async markRunStopped(runId: string, tasks: PageTask[]): Promise<void> {
+    await this.flushPendingWrites()
     await this._bulkUpsertTasks(runId, tasks)
     await this.update(runId, { status: 'stopped', stoppedAt: new Date() })
   }
 
   async markRunCompleted(runId: string, tasks: PageTask[]): Promise<void> {
+    await this.flushPendingWrites()
     await this._bulkUpsertTasks(runId, tasks)
     const hasFailed = tasks.some((t) => t.state === 'failed')
     const finalStatus = hasFailed ? 'failed' : 'completed'
@@ -110,33 +132,11 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
   // ── Task persistence ──────────────────────────────────────────────────────
 
   async upsertTask(runId: string, task: PageTask): Promise<void> {
-    await this.db.insert(runTasks).values({
-      id:           task.id,
-      runId,
-      url:          task.url,
-      stepName:     String(task.stepName),
-      stepType:     task.stepType,
-      state:        task.state,
-      attempts:     task.attempts,
-      maxAttempts:  task.maxAttempts,
-      error:        task.error ?? null,
-      parentTaskId: task.parentTaskId ?? null,
-      parent_data:  task.parent_data ?? null,
-      updatedAt:    new Date(),
-    }).onConflictDoUpdate({
-      target: runTasks.id,
-      set: {
-        state:     sql`excluded.state`,
-        attempts:  sql`excluded.attempts`,
-        error:     sql`excluded.error`,
-        updatedAt: sql`excluded.updated_at`,
-      },
-    })
+    this.writeBuffer.enqueueTask(runId, task)
   }
 
   async saveTaskResult(taskId: string, rows: Record<string, unknown>[]): Promise<void> {
-    await this.db.insert(taskResults).values({ taskId, rows })
-      .onConflictDoUpdate({ target: taskResults.taskId, set: { rows: sql`excluded.rows` } })
+    this.writeBuffer.enqueueResult(taskId, rows)
   }
 
   async saveTaskHtml(taskId: string, html: string): Promise<void> {
@@ -153,6 +153,22 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
   }
 
   async getTask(runId: string, taskId: string): Promise<StoredTask | null> {
+    const buffered = this.writeBuffer.peekTask(taskId)
+    if (buffered) {
+      return {
+        id: buffered.id,
+        runId,
+        url: buffered.url,
+        stepName: String(buffered.stepName),
+        stepType: buffered.stepType,
+        state: buffered.state,
+        attempts: buffered.attempts,
+        maxAttempts: buffered.maxAttempts,
+        error: buffered.error ?? null,
+        parentTaskId: buffered.parentTaskId ?? null,
+        parent_data: buffered.parent_data ?? null,
+      }
+    }
     const [row] = await this.db.select().from(runTasks)
       .where(and(eq(runTasks.id, taskId), eq(runTasks.runId, runId)))
     return row ? (row as StoredTask) : null
@@ -404,6 +420,18 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
             updatedAt: sql`excluded.updated_at`,
           },
         })
+      }
+    })
+  }
+
+  private async _bulkSaveResults(batch: { taskId: string; rows: Record<string, unknown>[] }[]): Promise<void> {
+    if (batch.length === 0) return
+    const BATCH = 500
+    await this.db.transaction(async (tx) => {
+      for (let i = 0; i < batch.length; i += BATCH) {
+        const chunk = batch.slice(i, i + BATCH)
+        await tx.insert(taskResults).values(chunk.map((b) => ({ taskId: b.taskId, rows: b.rows })))
+          .onConflictDoUpdate({ target: taskResults.taskId, set: { rows: sql`excluded.rows` } })
       }
     })
   }

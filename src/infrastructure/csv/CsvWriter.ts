@@ -17,8 +17,8 @@ export class CsvWriter {
         v === null || v === undefined
           ? ''
           : typeof v === 'object'
-            ? JSON.stringify(v)
-            : String(v),
+            ? JSON.stringify(v).replace(/\r?\n|\r/g, ' ')
+            : String(v).replace(/\r?\n|\r/g, ' '),
       ])
     )
     if (!this.stream) {

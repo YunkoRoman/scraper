@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { resolve, dirname } from 'node:path'
 import { EventEmitter } from 'node:events'
 import type { ParserConfig } from '../../domain/entities/Parser.js'
-import { ParserRun, type RunStats } from '../../domain/entities/ParserRun.js'
+import type { RunStats } from '../../domain/entities/ParserRun.js'
 import type { PageTask } from '../../domain/entities/PageTask.js'
 import type { Step } from '../../domain/entities/Step.js'
 import { LinkDeduplicator } from '../../domain/services/LinkDeduplicator.js'
@@ -11,6 +11,7 @@ import { CsvPostProcessor } from '../../infrastructure/csv/CsvPostProcessor.js'
 import { createOutputWriter, resolveOutputFileName, type OutputWriter, type OutputFormat } from '../../infrastructure/export/OutputWriter.js'
 import type { WorkerOutMessage } from '../../infrastructure/worker/messages.js'
 import type { StepName } from '../../domain/value-objects/StepName.js'
+import type { TaskStateStore } from '../../domain/services/TaskStateStore.js'
 import { mkdir } from 'node:fs/promises'
 import { PageState, isTerminal } from '../../domain/value-objects/PageState.js'
 
@@ -19,7 +20,6 @@ const __dirname = dirname(__filename)
 const isTsx = __filename.endsWith('.ts')
 
 export class ParserOrchestrator extends EventEmitter {
-  private run: ParserRun
   private workers = new Map<StepName, Worker>()
   private csvWriters = new Map<string, OutputWriter>()
   private pendingWrites: Promise<void>[] = []
@@ -36,38 +36,38 @@ export class ParserOrchestrator extends EventEmitter {
   constructor(
     private readonly config: ParserConfig,
     outputBaseDir: string,
+    private readonly store: TaskStateStore,
+    private readonly runId_: string,
     snapshotTasks?: PageTask[],
-    runId?: string,
   ) {
     super()
-    this.run = new ParserRun(config.name, runId)
     if (snapshotTasks) {
-      for (const t of snapshotTasks) this.run.restoreTask(t)
+      for (const t of snapshotTasks) void this.store.restoreTask(t)
     }
     this.deduplicator = new LinkDeduplicator(config.deduplication)
-    this.outputDir = resolve(outputBaseDir, config.name, this.run.id)
+    this.outputDir = resolve(outputBaseDir, config.name, this.runId_)
   }
 
   get runId(): string {
-    return this.run.id
+    return this.runId_
   }
 
-  getAllTasks(): PageTask[] {
-    return this.run.allTasks()
+  async getAllTasks(): Promise<PageTask[]> {
+    return this.store.allTasks()
   }
 
-  retryTask(taskId: string): void {
-    const task = this.run.getTask(taskId)
+  async retryTask(taskId: string): Promise<void> {
+    const task = await this.store.getTask(taskId)
     if (!task) throw new Error(`Task "${taskId}" not found`)
     if (task.state !== PageState.Failed && task.state !== PageState.Aborted) {
       throw new Error(`Task "${taskId}" is not failed or aborted (state: ${task.state})`)
     }
-    this.run.markPending(taskId)
-    this.dispatchTask(taskId)
+    await this.store.markPending(taskId)
+    await this.dispatchTask(taskId)
   }
 
-  abortTask(taskId: string): void {
-    const task = this.run.getTask(taskId)
+  async abortTask(taskId: string): Promise<void> {
+    const task = await this.store.getTask(taskId)
     if (!task) throw new Error(`Task "${taskId}" not found`)
     if (
       task.state !== PageState.Pending &&
@@ -76,64 +76,54 @@ export class ParserOrchestrator extends EventEmitter {
     ) {
       throw new Error(`Task "${taskId}" cannot be aborted (state: ${task.state})`)
     }
-    // Do NOT touch globalActive here. If the task is in-progress the worker will
-    // still respond with PAGE_SUCCESS/PAGE_FAILED, which does the single decrement.
-    this.run.markAborted(taskId)
+    await this.store.markAborted(taskId)
   }
 
   async start(): Promise<void> {
     await mkdir(this.outputDir, { recursive: true })
+    this.completionPromise = new Promise((resolve) => { this.resolveCompletion = resolve })
 
-    this.completionPromise = new Promise((resolve) => {
-      this.resolveCompletion = resolve
-    })
+    for (const [, step] of this.config.steps) this.spawnWorker(step)
 
-    for (const [, step] of this.config.steps) {
-      this.spawnWorker(step)
-    }
-
-    const snapshotTasks = this.run.allTasks()
+    const snapshotTasks = await this.store.allTasks()
     if (snapshotTasks.length > 0) {
-      // Resume mode: seed deduplicator with succeeded URLs, re-dispatch aborted/pending tasks
-      const successUrls = snapshotTasks
-        .filter((t) => t.state === PageState.Success)
-        .map((t) => t.url)
+      // Warm the cache so subsequent getTask() calls don't round-trip to DB per task.
+      for (const t of snapshotTasks) await this.store.restoreTask(t)
+      const successUrls = snapshotTasks.filter((t) => t.state === PageState.Success).map((t) => t.url)
       this.deduplicator.seed(successUrls)
-
       const toDispatch = snapshotTasks.filter(
         (t) => t.state === PageState.Aborted || t.state === PageState.Pending || t.state === PageState.Retry,
       )
       for (const task of toDispatch) {
-        this.run.markPending(task.id)
-        this.dispatchTask(task.id)
+        await this.store.markPending(task.id)
+        await this.dispatchTask(task.id)
       }
     } else {
-      // Fresh start
       if (!/^https?:\/\//i.test(this.config.entryUrl)) {
-        throw new Error(`Invalid entryUrl: must start with http:// or https://`)
+        throw new Error('Invalid entryUrl: must start with http:// or https://')
       }
       const initialUrls = this.deduplicator.filter([this.config.entryUrl])
       const entryStepType = this.config.steps.get(this.config.entryStep)?.type ?? 'traverser'
       for (const url of initialUrls) {
-        const task = this.run.addTask(url, this.config.entryStep, entryStepType, this.config.retryConfig)
-        this.dispatchTask(task.id)
+        const task = await this.store.addTask(url, this.config.entryStep, entryStepType, this.config.retryConfig)
+        await this.dispatchTask(task.id)
       }
     }
 
-    this.emit('stats', this.run.getStats())
-
+    this.emit('stats', await this.store.getStats())
     return this.completionPromise
   }
 
   async stop(): Promise<void> {
     this.stopped = true
-    for (const task of this.run.allTasks()) {
+    const tasks = await this.store.allTasks()
+    for (const task of tasks) {
       if (
         task.state === PageState.Pending ||
         task.state === PageState.Retry ||
         task.state === PageState.InProgress
       ) {
-        this.run.markAborted(task.id)
+        await this.store.markAborted(task.id)
       }
     }
     const exitPromises = [...this.workers.values()].map(
@@ -149,8 +139,8 @@ export class ParserOrchestrator extends EventEmitter {
     this.resolveCompletion()
   }
 
-  getStats(): RunStats {
-    return this.run.getStats()
+  async getStats(): Promise<RunStats> {
+    return this.store.getStats()
   }
 
   private spawnWorker(step: Step): void {
@@ -185,140 +175,156 @@ export class ParserOrchestrator extends EventEmitter {
           : { stepCode: step.code!, stepType: step.type, outputFile, stepSettings: step.settings, stepName: String(step.name), browserSettings: this.config.browserSettings })
 
     const worker = new Worker(entryFile, { workerData: wData })
-    worker.on('message', (msg: WorkerOutMessage) => this.handleWorkerMessage(msg))
+    worker.on('message', (msg: WorkerOutMessage) => {
+      this.handleWorkerMessage(msg).catch((err) => console.error('[orchestrator] handler failed', err))
+    })
     worker.on('error', (err) => {
       this.emit('error', err)
-      // Mark all in-progress tasks for this step as failed so the run can complete.
-      for (const task of this.run.allTasks()) {
-        if (String(task.stepName) === String(step.name) && task.state === PageState.InProgress) {
-          this.globalActive--
-          this.run.markFailed(task.id, `Worker crashed: ${err.message}`)
-          this.emit('task_done', this.run.getTask(task.id)!)
+      void (async () => {
+        const tasks = await this.store.allTasks()
+        for (const task of tasks) {
+          if (String(task.stepName) === String(step.name) && task.state === PageState.InProgress) {
+            this.globalActive--
+            const failed = await this.store.markFailed(task.id, `Worker crashed: ${err.message}`)
+            this.emit('task_done', failed)
+          }
         }
-      }
-      this.emit('stats', this.run.getStats())
-      this.flushDispatchQueue()
-      this.checkCompletion()
+        this.emit('stats', await this.store.getStats())
+        await this.flushDispatchQueue()
+        this.checkCompletion()
+      })()
     })
     this.workers.set(step.name, worker)
   }
 
-  private handleWorkerMessage(msg: WorkerOutMessage): void {
+  private async handleWorkerMessage(msg: WorkerOutMessage): Promise<void> {
     switch (msg.type) {
       case 'LINKS_DISCOVERED': {
-        // Don't create new tasks after stop.
         if (this.stopped) break
         const validItems = msg.items.filter((i) => /^https?:\/\//i.test(i.link))
         const newLinks = new Set(this.deduplicator.filter(validItems.map((i) => i.link)))
         const newItems = validItems.filter((i) => newLinks.has(i.link))
         for (const item of newItems) {
-          const stepName = item.page_type as StepName
-          const stepType = this.config.steps.get(stepName)?.type ?? 'traverser'
-          const task = this.run.addTask(
-            item.link,
-            stepName,
-            stepType,
-            this.config.retryConfig,
-            msg.taskId,
-            item.parent_data,
-          )
-          this.dispatchTask(task.id)
+          const sName = item.page_type as StepName
+          const stepType = this.config.steps.get(sName)?.type ?? 'traverser'
+          const task = await this.store.addTask(item.link, sName, stepType, this.config.retryConfig, msg.taskId, item.parent_data)
+          await this.dispatchTask(task.id)
         }
-        this.emit('stats', this.run.getStats())
+        this.emit('stats', await this.store.getStats())
         break
       }
       case 'DATA_EXTRACTED': {
-        for (const row of msg.rows) {
-          this.writeOutputRow(msg.outputFile, row)
-        }
-        this.emit('data_extracted', { taskId: msg.taskId, rows: msg.rows, task: this.run.getTask(msg.taskId) })
+        for (const row of msg.rows) this.writeOutputRow(msg.outputFile, row)
+        const task = await this.store.getTask(msg.taskId)
+        this.emit('data_extracted', { taskId: msg.taskId, rows: msg.rows, task })
         break
       }
       case 'PAGE_SUCCESS': {
         this.globalActive--
-        const task = this.run.getTask(msg.taskId)
+        const task = await this.store.getTask(msg.taskId)
         if (!task || isTerminal(task.state)) {
-          this.flushDispatchQueue()
+          await this.flushDispatchQueue()
           this.checkCompletion()
           break
         }
-        this.run.markSuccess(msg.taskId)
-        this.emit('task_done', this.run.getTask(msg.taskId)!)
-        this.emit('stats', this.run.getStats())
-        this.flushDispatchQueue()
+        const updated = await this.store.markSuccess(msg.taskId)
+        this.emit('task_done', updated)
+        this.emit('stats', await this.store.getStats())
+        await this.flushDispatchQueue()
         this.checkCompletion()
         break
       }
       case 'LOG': {
         const line = `[${msg.stepName}] ${msg.args.join(' ')}`
-        if (msg.level === 'error') console.error(line)
-        else console.log(line)
+        if (msg.level === 'error') console.error(line); else console.log(line)
         break
       }
       case 'PAGE_FAILED': {
         this.globalActive--
         if (msg.html) this.taskHtml.set(msg.taskId, msg.html)
-        const task = this.run.getTask(msg.taskId)
+        const task = await this.store.getTask(msg.taskId)
         if (!task || isTerminal(task.state)) {
-          this.flushDispatchQueue()
+          await this.flushDispatchQueue()
           break
         }
         if (task.attempts < task.maxAttempts) {
-          this.run.markRetry(msg.taskId, msg.error)
-          this.emit('stats', this.run.getStats())
-          this.dispatchTask(msg.taskId)
+          await this.store.markRetry(msg.taskId, msg.error)
+          this.emit('stats', await this.store.getStats())
+          await this.dispatchTask(msg.taskId)
         } else {
-          this.run.markFailed(msg.taskId, msg.error)
+          const updated = await this.store.markFailed(msg.taskId, msg.error)
           const html = this.taskHtml.get(msg.taskId)
           if (html) {
             this.emit('task_failed_html', msg.taskId, html)
             this.taskHtml.delete(msg.taskId)
           }
-          this.emit('task_done', this.run.getTask(msg.taskId)!)
-          this.emit('stats', this.run.getStats())
+          this.emit('task_done', updated)
+          this.emit('stats', await this.store.getStats())
           this.checkCompletion()
         }
-        this.flushDispatchQueue()
+        await this.flushDispatchQueue()
         break
       }
     }
   }
 
-  private dispatchTask(taskId: string): void {
+  private async dispatchTask(taskId: string): Promise<void> {
     if (this.stopped) return
     const quota = this.config.concurrentQuota
     if (quota !== undefined && this.globalActive >= quota) {
       this.dispatchQueue.push(taskId)
       return
     }
-    this._sendToWorker(taskId)
+    await this._sendToWorker(taskId)
   }
 
-  private _sendToWorker(taskId: string): void {
-    const task = this.run.getTask(taskId)
+  private async _sendToWorker(taskId: string): Promise<void> {
+    const task = await this.store.getTask(taskId)
     if (!task || isTerminal(task.state)) return
     const worker = this.workers.get(task.stepName)
     if (!worker) {
-      this.run.markFailed(taskId, `No worker for step "${task.stepName}"`)
-      this.emit('task_done', this.run.getTask(taskId)!)
-      this.emit('stats', this.run.getStats())
+      const failed = await this.store.markFailed(taskId, `No worker for step "${task.stepName}"`)
+      this.emit('task_done', failed)
+      this.emit('stats', await this.store.getStats())
       this.checkCompletion()
       return
     }
-    this.run.markInProgress(taskId)
+    // Increment BEFORE the await so concurrent calls don't bypass the quota
+    // check in dispatchTask(). Decrement if markInProgress throws.
     this.globalActive++
-    worker.postMessage({ type: 'PROCESS_PAGE', task })
+    let inProgress: PageTask
+    try {
+      inProgress = await this.store.markInProgress(taskId)
+    } catch (err) {
+      this.globalActive--
+      throw err
+    }
+    worker.postMessage({ type: 'PROCESS_PAGE', task: inProgress })
   }
 
-  private flushDispatchQueue(): void {
+  private async flushDispatchQueue(): Promise<void> {
     const quota = this.config.concurrentQuota
-    while (
-      this.dispatchQueue.length > 0 &&
-      (quota === undefined || this.globalActive < quota)
-    ) {
+    while (this.dispatchQueue.length > 0 && (quota === undefined || this.globalActive < quota)) {
       const nextId = this.dispatchQueue.shift()!
-      this._sendToWorker(nextId)
+      await this._sendToWorker(nextId)
     }
+  }
+
+  private checkCompletion(): void {
+    if (this.stopped || this.completing) return
+    void (async () => {
+      if (!(await this.store.isComplete())) return
+      if (this.completing) return
+      this.completing = true
+      try {
+        await this.closeAllWriters()
+        await this.runPostProcessing()
+        this.emit('complete', await this.store.getStats())
+        this.resolveCompletion()
+      } catch (err) {
+        this.emit('error', err)
+      }
+    })()
   }
 
   private writeOutputRow(outputFile: string, data: Record<string, unknown>): void {
@@ -336,18 +342,6 @@ export class ParserOrchestrator extends EventEmitter {
     }
     const p = this.csvWriters.get(filePath)!.write(data).catch(console.error) as Promise<void>
     this.pendingWrites.push(p)
-  }
-
-  private checkCompletion(): void {
-    if (this.stopped || this.completing || !this.run.isComplete()) return
-    this.completing = true
-    this.closeAllWriters()
-      .then(() => this.runPostProcessing())
-      .then(() => {
-        this.emit('complete', this.run.getStats())
-        this.resolveCompletion()
-      })
-      .catch((err) => this.emit('error', err))
   }
 
   private async closeAllWriters(): Promise<void> {

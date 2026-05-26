@@ -142,6 +142,30 @@ export async function fetchFileContent(
   return res.text()
 }
 
+export interface CsvRowsResponse {
+  headers: string[]
+  rows: string[][]
+  total: number
+  page: number
+  limit: number
+  pages: number
+}
+
+export async function fetchCsvRows(
+  parserId: string,
+  runId: string,
+  fileName: string,
+  page: number,
+  limit: number,
+): Promise<CsvRowsResponse> {
+  const q = new URLSearchParams({ page: String(page), limit: String(limit) })
+  const res = await fetch(
+    `${API_BASE}/api/parsers/${parserId}/files/${encodeURIComponent(runId)}/${encodeURIComponent(fileName)}/rows?${q}`,
+  )
+  if (!res.ok) throw new Error(`Failed to fetch CSV rows: ${res.status}`)
+  return res.json() as Promise<CsvRowsResponse>
+}
+
 export interface ParserRow {
   id: string
   name: string
