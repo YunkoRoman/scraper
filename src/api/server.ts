@@ -12,6 +12,7 @@ import { StepVersionPersistenceService } from '../infrastructure/db/StepVersionP
 import { SchedulerService } from '../application/services/SchedulerService.js'
 import { broadcast } from './sse.js'
 import { WebhookService } from '../infrastructure/webhook/WebhookService.js'
+import { closePool } from '../infrastructure/db/client.js'
 import { createParsersRouter } from './routes/parsers.js'
 import { createJobsRouter } from './routes/jobs.js'
 import { createDashboardRouter } from './routes/dashboard.js'
@@ -23,7 +24,7 @@ const runPersistence = new RunPersistenceService()
 const parserService  = new ParserPersistenceService()
 const stepVersionService = new StepVersionPersistenceService()
 parserService.setVersionService(stepVersionService)
-const runner         = new ParserRunnerService(new RunParser(dbLoader, outputDir), runPersistence)
+const runner         = new ParserRunnerService(new RunParser(dbLoader, outputDir, runPersistence), runPersistence)
 const webhookService = new WebhookService()
 const schedulePersistence = new SchedulePersistenceService()
 const scheduler           = new SchedulerService(schedulePersistence, parserService, runner)
@@ -75,6 +76,8 @@ app.listen(PORT, () => console.log(`API server →  http://localhost:${PORT}`))
 async function shutdown() {
   scheduler.stop()
   await Promise.allSettled(runner.listRunning().map((name) => runner.stop(name)))
+  try { await runPersistence.flushPendingWrites() } catch (err) { console.error('[server] flush failed:', err) }
+  try { await closePool() } catch (err) { console.error('[server] pool close failed:', err) }
   process.exit(0)
 }
 process.on('SIGTERM', shutdown)

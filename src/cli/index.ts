@@ -5,13 +5,14 @@ import { RunParser } from '../application/use-cases/RunParser.js'
 import { ParserRunnerService } from '../application/services/ParserRunnerService.js'
 import { RunPersistenceService } from '../infrastructure/db/RunPersistenceService.js'
 import { ConsoleReporter } from './ConsoleReporter.js'
+import { closePool } from '../infrastructure/db/client.js'
 import type { RunStats } from '../domain/entities/ParserRun.js'
 
 const outputDir = resolve(process.cwd(), 'output')
 
 const loader = new DbParserLoader()
 const runPersistence = new RunPersistenceService()
-const runParser = new RunParser(loader, outputDir)
+const runParser = new RunParser(loader, outputDir, runPersistence)
 const runner = new ParserRunnerService(runParser, runPersistence)
 const reporter = new ConsoleReporter()
 
@@ -31,6 +32,8 @@ program
           await runner.stop(name)
         }
       }
+      try { await runPersistence.flushPendingWrites() } catch {}
+      try { await closePool() } catch {}
       process.exit(0)
     })
 
