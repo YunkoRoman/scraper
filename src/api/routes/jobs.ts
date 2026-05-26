@@ -91,7 +91,7 @@ export function createJobsRouter({ runner, runPersistence }: Deps) {
     const parserName = runner.findParserByRunId(runId)
     const orch = parserName ? runner.getOrchestrator(parserName) : undefined
     if (orch) {
-      const tasks = orch.getAllTasks()
+      const tasks = await orch.getAllTasks()
       const map = new Map<string, { stepName: string; total: number; success: number; failed: number }>()
       for (const t of tasks) {
         const e = map.get(t.stepName) ?? { stepName: t.stepName, total: 0, success: 0, failed: 0 }
@@ -116,9 +116,9 @@ export function createJobsRouter({ runner, runPersistence }: Deps) {
     const parserName = runner.findParserByRunId(runId)
     const orch = parserName ? runner.getOrchestrator(parserName) : undefined
     if (orch) {
-      let allTasks = orch.getAllTasks()
+      let allTasks = await orch.getAllTasks()
       if (status)   allTasks = allTasks.filter((t) => t.state === status)
-      if (stepName) allTasks = allTasks.filter((t) => t.stepName === stepName)
+      if (stepName) allTasks = allTasks.filter((t) => String(t.stepName) === stepName)
       res.json({ tasks: allTasks.slice((page - 1) * limit, page * limit), total: allTasks.length })
       return
     }
@@ -129,7 +129,8 @@ export function createJobsRouter({ runner, runPersistence }: Deps) {
     const { runId, taskId } = req.params
     const parserName = runner.findParserByRunId(runId)
     if (parserName) {
-      const task = runner.getOrchestrator(parserName)?.getAllTasks().find((t) => t.id === taskId)
+      const tasks = await runner.getOrchestrator(parserName)?.getAllTasks()
+      const task = tasks?.find((t) => t.id === taskId)
       if (task) { res.json(task); return }
     }
     const task = await runPersistence.getTask(runId, taskId)
@@ -143,24 +144,24 @@ export function createJobsRouter({ runner, runPersistence }: Deps) {
     res.json({ rows: result?.rows ?? [], html: result?.html ?? null })
   })
 
-  router.post('/:runId/tasks/:taskId/retry', (req, res) => {
+  router.post('/:runId/tasks/:taskId/retry', async (req, res) => {
     const { runId, taskId } = req.params
     const parserName = runner.findParserByRunId(runId)
     if (!parserName) { res.status(404).json({ error: 'No active run with this runId — resume the job first' }); return }
     try {
-      runner.retryTask(parserName, taskId)
+      await runner.retryTask(parserName, taskId)
       res.json({ ok: true })
     } catch (err) {
       res.status(400).json({ error: (err as Error).message })
     }
   })
 
-  router.post('/:runId/tasks/:taskId/abort', (req, res) => {
+  router.post('/:runId/tasks/:taskId/abort', async (req, res) => {
     const { runId, taskId } = req.params
     const parserName = runner.findParserByRunId(runId)
     if (!parserName) { res.status(404).json({ error: 'No active run with this runId — resume the job first' }); return }
     try {
-      runner.abortTask(parserName, taskId)
+      await runner.abortTask(parserName, taskId)
       res.json({ ok: true })
     } catch (err) {
       res.status(400).json({ error: (err as Error).message })

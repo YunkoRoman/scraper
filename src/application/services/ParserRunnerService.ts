@@ -24,7 +24,7 @@ export class ParserRunnerService extends EventEmitter {
     const onComplete = async (stats: unknown) => {
       const s = stats as RunStats
       this.lastStats.set(parserName, s)
-      await this.runPersistence.markRunCompleted(ref.orchestrator!.runId, ref.orchestrator!.getAllTasks()).catch(console.error)
+      await this.runPersistence.markRunCompleted(ref.orchestrator!.runId, await ref.orchestrator!.getAllTasks()).catch(console.error)
       this.emit('complete', parserName, s)
       this.activeRuns.delete(parserName)
     }
@@ -47,32 +47,21 @@ export class ParserRunnerService extends EventEmitter {
     if (this.activeRuns.has(parserName)) {
       throw new Error(`Parser "${parserName}" is already running`)
     }
-    const snapshot = await this.runPersistence.loadLatestStoppedRunTasks(parserName)
-    if (!snapshot) throw new Error(`No stopped run found for "${parserName}"`)
+    const latest = await this.runPersistence.getLatestRunInfo(parserName)
+    if (!latest || latest.status !== 'stopped') throw new Error(`No stopped run found for "${parserName}"`)
 
     const ref = { orchestrator: null as ParserOrchestrator | null }
     const onComplete = async (stats: unknown) => {
       const s = stats as RunStats
       this.lastStats.set(parserName, s)
-      await this.runPersistence.markRunCompleted(ref.orchestrator!.runId, ref.orchestrator!.getAllTasks()).catch(console.error)
+      await this.runPersistence.markRunCompleted(ref.orchestrator!.runId, await ref.orchestrator!.getAllTasks()).catch(console.error)
       this.emit('complete', parserName, s)
       this.activeRuns.delete(parserName)
     }
     ref.orchestrator = await this.runParser.resume(
       parserName,
-      snapshot.runId,
-      snapshot.tasks.map((t) => ({
-        id:           t.id,
-        url:          t.url,
-        stepName:     t.stepName as any,
-        stepType:     t.stepType,
-        state:        t.state as any,
-        attempts:     t.attempts,
-        maxAttempts:  t.maxAttempts,
-        error:        t.error ?? undefined,
-        parentTaskId: t.parentTaskId ?? undefined,
-        parent_data:  (t.parent_data as Record<string, unknown>) ?? undefined,
-      })),
+      latest.id,
+      [],
       (stats) => {
         const s = stats as RunStats
         this.lastStats.set(parserName, s)
@@ -82,7 +71,7 @@ export class ParserRunnerService extends EventEmitter {
       (filePath) => this.emit('postprocess', parserName, filePath),
     )
     this._wireTaskEvents(ref.orchestrator)
-    await this.runPersistence.markRunRunning(snapshot.runId).catch(console.error)
+    await this.runPersistence.markRunRunning(latest.id).catch(console.error)
     this.activeRuns.set(parserName, ref.orchestrator)
   }
 
@@ -91,7 +80,7 @@ export class ParserRunnerService extends EventEmitter {
     if (orchestrator) {
       const runId = orchestrator.runId
       await orchestrator.stop()
-      await this.runPersistence.markRunStopped(runId, orchestrator.getAllTasks()).catch(console.error)
+      await this.runPersistence.markRunStopped(runId, await orchestrator.getAllTasks()).catch(console.error)
       this.activeRuns.delete(parserName)
       this.emit('stopped', parserName)
       return
@@ -121,16 +110,16 @@ export class ParserRunnerService extends EventEmitter {
     await this.run(parserName)
   }
 
-  retryTask(parserName: string, taskId: string): void {
+  async retryTask(parserName: string, taskId: string): Promise<void> {
     const orchestrator = this.activeRuns.get(parserName)
     if (!orchestrator) throw new Error(`No active run for parser "${parserName}"`)
-    orchestrator.retryTask(taskId)
+    await orchestrator.retryTask(taskId)
   }
 
-  abortTask(parserName: string, taskId: string): void {
+  async abortTask(parserName: string, taskId: string): Promise<void> {
     const orchestrator = this.activeRuns.get(parserName)
     if (!orchestrator) throw new Error(`No active run for parser "${parserName}"`)
-    orchestrator.abortTask(taskId)
+    await orchestrator.abortTask(taskId)
   }
 
   async retryFailed(runId: string): Promise<void> {
@@ -142,31 +131,19 @@ export class ParserRunnerService extends EventEmitter {
     }
 
     await this.runPersistence.resetFailedTasks(runId)
-    const { tasks } = await this.runPersistence.getRunTasks(runId, 1, 10_000)
 
     const ref = { orchestrator: null as ParserOrchestrator | null }
     const onComplete = async (stats: unknown) => {
       const s = stats as RunStats
       this.lastStats.set(parserName, s)
-      await this.runPersistence.markRunCompleted(ref.orchestrator!.runId, ref.orchestrator!.getAllTasks()).catch(console.error)
+      await this.runPersistence.markRunCompleted(ref.orchestrator!.runId, await ref.orchestrator!.getAllTasks()).catch(console.error)
       this.emit('complete', parserName, s)
       this.activeRuns.delete(parserName)
     }
     ref.orchestrator = await this.runParser.resume(
       parserName,
       runId,
-      tasks.map((t) => ({
-        id:           t.id,
-        url:          t.url,
-        stepName:     t.stepName as any,
-        stepType:     t.stepType,
-        state:        t.state as any,
-        attempts:     t.attempts,
-        maxAttempts:  t.maxAttempts,
-        error:        t.error ?? undefined,
-        parentTaskId: t.parentTaskId ?? undefined,
-        parent_data:  (t.parent_data as Record<string, unknown>) ?? undefined,
-      })),
+      [],
       (stats) => {
         const s = stats as RunStats
         this.lastStats.set(parserName, s)
@@ -192,8 +169,6 @@ export class ParserRunnerService extends EventEmitter {
   }
 
   getStats(parserName: string): RunStats | undefined {
-    const orchestrator = this.activeRuns.get(parserName)
-    if (orchestrator) return orchestrator.getStats()
     return this.lastStats.get(parserName)
   }
 
@@ -207,16 +182,11 @@ export class ParserRunnerService extends EventEmitter {
 
   private _wireTaskEvents(orchestrator: ParserOrchestrator): void {
     orchestrator.on('task_done', (task: PageTask) => {
-      this.runPersistence.upsertTask(orchestrator.runId, task).catch((err) => {
-        console.error(`[persistence] upsertTask failed for task ${task.id}:`, err)
-      })
+      // upsertTask removed — DbTaskStateStore writes through on every state mutation
       this.emit('task_done', orchestrator.runId, task)
     })
-    orchestrator.on('data_extracted', ({ taskId, rows, task }: { taskId: string; rows: Record<string, unknown>[]; task: PageTask | undefined }) => {
-      const save = task
-        ? this.runPersistence.upsertTask(orchestrator.runId, task).then(() => this.runPersistence.saveTaskResult(taskId, rows))
-        : this.runPersistence.saveTaskResult(taskId, rows)
-      save.catch((err) => {
+    orchestrator.on('data_extracted', ({ taskId, rows }: { taskId: string; rows: Record<string, unknown>[]; task: PageTask | undefined }) => {
+      this.runPersistence.saveTaskResult(taskId, rows).catch((err) => {
         console.error(`[persistence] saveTaskResult failed for task ${taskId}:`, err)
       })
     })
