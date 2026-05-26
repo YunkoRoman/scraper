@@ -5,7 +5,7 @@ import {
   getParserStats,
   listJobs,
   listFiles,
-  fetchFileContent,
+  fetchCsvRows,
   downloadFile,
   startParser,
   stopParser,
@@ -14,6 +14,7 @@ import {
   type ParserStats,
   type RunInfo,
   type OutputFile,
+  type CsvRowsResponse,
 } from '../../api'
 import { SpringButton } from '../../components/motion/SpringButton'
 import { SchedulePanel } from './SchedulePanel'
@@ -39,34 +40,6 @@ function runDurationSeconds(run: RunInfo): number | null {
   return Math.round((new Date(run.stoppedAt).getTime() - new Date(run.startedAt).getTime()) / 1000)
 }
 
-function parseCsv(text: string): { headers: string[]; rows: string[][] } {
-  const allRows: string[][] = []
-  let row: string[] = []
-  let current = ''
-  let inQuote = false
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]
-    const next = text[i + 1]
-    if (inQuote) {
-      if (ch === '"' && next === '"') { current += '"'; i++ }
-      else if (ch === '"') { inQuote = false }
-      else { current += ch }
-    } else {
-      if (ch === '"') { inQuote = true }
-      else if (ch === ',') { row.push(current); current = '' }
-      else if (ch === '\r' && next === '\n') { row.push(current); current = ''; allRows.push(row); row = []; i++ }
-      else if (ch === '\n') { row.push(current); current = ''; allRows.push(row); row = [] }
-      else { current += ch }
-    }
-  }
-  if (current || row.length > 0) { row.push(current); allRows.push(row) }
-
-  if (allRows.length === 0) return { headers: [], rows: [] }
-  const headers = allRows[0]
-  const rows = allRows.slice(1).filter((r) => r.some((c) => c.trim()))
-  return { headers, rows }
-}
 
 function RunStatusBadge({ status }: { status: RunInfo['status'] }) {
   const cls =
@@ -97,6 +70,7 @@ function StatCard({ label, value, icon }: { label: string; value: string | numbe
 }
 
 const RUNS_PER_PAGE = 5
+const CSV_PER_PAGE = 20
 
 export function ParserDetailPage() {
   const navigate = useNavigate()
@@ -112,7 +86,7 @@ export function ParserDetailPage() {
 
   const [files, setFiles] = useState<OutputFile[]>([])
   const [selectedFile, setSelectedFile] = useState<OutputFile | null>(null)
-  const [csvData, setCsvData] = useState<{ headers: string[]; rows: string[][] } | null>(null)
+  const [csvData, setCsvData] = useState<CsvRowsResponse | null>(null)
   const [csvLoading, setCsvLoading] = useState(false)
   const [csvPage, setCsvPage] = useState(1)
 
@@ -156,16 +130,27 @@ export function ParserDetailPage() {
       .catch(() => {})
   }, [parserId])
 
+  // When a file is selected, reset to page 1.
+  useEffect(() => {
+    setCsvPage(1)
+    setCsvData(null)
+  }, [selectedFile])
+
+  // Whenever the file or page changes, fetch that page.
   useEffect(() => {
     if (!selectedFile) return
+    if (!selectedFile.name.endsWith('.csv')) {
+      setCsvData(null)
+      return
+    }
+    let cancelled = false
     setCsvLoading(true)
-    setCsvData(null)
-    setCsvPage(1)
-    fetchFileContent(parserId, selectedFile.runId, selectedFile.name)
-      .then((text) => setCsvData(parseCsv(text)))
-      .catch(() => setCsvData(null))
-      .finally(() => setCsvLoading(false))
-  }, [parserId, selectedFile])
+    fetchCsvRows(parserId, selectedFile.runId, selectedFile.name, csvPage, CSV_PER_PAGE)
+      .then((data) => { if (!cancelled) setCsvData(data) })
+      .catch(() => { if (!cancelled) setCsvData(null) })
+      .finally(() => { if (!cancelled) setCsvLoading(false) })
+    return () => { cancelled = true }
+  }, [parserId, selectedFile, csvPage])
 
   async function handleRunNow() {
     setActionLoading(true)
@@ -403,9 +388,8 @@ export function ParserDetailPage() {
             ) : !csvData || csvData.headers.length === 0 ? (
               <p className="px-5 py-10 text-sm text-gray-400 text-center">Could not parse file.</p>
             ) : (() => {
-              const CSV_PER_PAGE = 20
-              const csvTotalPages = Math.ceil(csvData.rows.length / CSV_PER_PAGE)
-              const pageRows = csvData.rows.slice((csvPage - 1) * CSV_PER_PAGE, csvPage * CSV_PER_PAGE)
+              const pageRows = csvData.rows
+              const csvTotalPages = csvData.pages
               return (
                 <>
                   <table className="w-full text-xs">
@@ -433,12 +417,12 @@ export function ParserDetailPage() {
                   {csvTotalPages > 1 && (
                     <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between gap-2 shrink-0 sticky bottom-0 bg-white dark:bg-gray-800">
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {(csvPage - 1) * CSV_PER_PAGE + 1}–{Math.min(csvPage * CSV_PER_PAGE, csvData.rows.length)} of {csvData.rows.length} rows
+                        {csvData.total === 0 ? 'No rows' : `${(csvData.page - 1) * csvData.limit + 1}–${Math.min(csvData.page * csvData.limit, csvData.total)} of ${csvData.total} rows`}
                       </span>
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => setCsvPage((p) => Math.max(1, p - 1))}
-                          disabled={csvPage === 1}
+                          disabled={csvData.page === 1}
                           className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -447,7 +431,7 @@ export function ParserDetailPage() {
                         </button>
                         <button
                           onClick={() => setCsvPage((p) => Math.min(csvTotalPages, p + 1))}
-                          disabled={csvPage === csvTotalPages}
+                          disabled={csvData.page >= csvData.pages}
                           className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

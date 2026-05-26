@@ -16,6 +16,7 @@ import { broadcast, getClients, initSSE, writeSSE } from '../sse.js'
 import type { SchedulePersistenceService } from '../../infrastructure/db/SchedulePersistenceService.js'
 import { SchedulerService } from '../../application/services/SchedulerService.js'
 import type { StepVersionPersistenceService } from '../../infrastructure/db/StepVersionPersistenceService.js'
+import { CsvRowReader } from '../../infrastructure/csv/CsvRowReader.js'
 
 interface Deps {
   runner: ParserRunnerService
@@ -307,6 +308,43 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
       res.json({ files })
     } catch {
       res.json({ files: [] })
+    }
+  })
+
+  router.get('/:id/files/:runId/:file/rows', async (req, res) => {
+    const { name }: ParserRow = res.locals.parser
+    const { runId, file } = req.params
+
+    if (!file.endsWith('.csv')) {
+      res.status(400).json({ error: 'Row pagination is only supported for CSV files' })
+      return
+    }
+    if (file.includes('/') || file.includes('..') || runId.includes('/') || runId.includes('..')) {
+      res.status(400).json({ error: 'Invalid path' })
+      return
+    }
+
+    const safeDir = resolve(outputDir, name)
+    const filePath = resolve(safeDir, runId, file)
+    if (!filePath.startsWith(safeDir + '/')) {
+      res.status(400).json({ error: 'Invalid path' })
+      return
+    }
+    if (!existsSync(filePath)) {
+      res.status(404).json({ error: 'File not found' })
+      return
+    }
+
+    const page = Number.parseInt(String(req.query.page ?? '1'), 10) || 1
+    const limit = Number.parseInt(String(req.query.limit ?? '20'), 10) || 20
+
+    try {
+      const reader = new CsvRowReader(filePath)
+      const result = await reader.readPage(page, limit)
+      res.json(result)
+    } catch (err) {
+      console.error('[parsers/rows] failed to read CSV page:', err)
+      res.status(500).json({ error: 'Failed to read CSV rows' })
     }
   })
 
