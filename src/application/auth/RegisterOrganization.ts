@@ -32,6 +32,7 @@ export interface AuthDb {
   } | null>
   createOrgAndUser(args: CreateOrgAndUserArgs): Promise<AuthUser>
   hashPassword(plain: string): Promise<string>
+  comparePassword(plain: string, hash: string): Promise<boolean>
 }
 
 const MIN_LENGTH = 12
