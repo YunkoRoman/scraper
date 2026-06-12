@@ -1,0 +1,21 @@
+[mcp_servers.context7]
+command = "npx"
+args = [
+    "-y",
+    "@upstash/context7-mcp",
+]
+
+[mcp_servers.playwright]
+command = "npx"
+args = [
+    "-y",
+    "@playwright/mcp@latest",
+]
+
+[mcp_servers.postgres]
+command = "npx"
+args = [
+    "-y",
+    "@modelcontextprotocol/server-postgres",
+    "postgresql://postgres:postgres@localhost:5432/scraper",
+]

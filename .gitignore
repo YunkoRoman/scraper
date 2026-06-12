@@ -30,4 +30,5 @@ pnpm-debug.log*
 *.sw?
 
 # Tooling
-# .claude/
+# .claude/ is tracked (shared agents/skills/hooks); only local overrides are ignored
+.claude/settings.local.json
