@@ -4,26 +4,21 @@ import {
   type AuthDb,
 } from '../../src/application/auth/RegisterOrganization.js'
 import { AuthError } from '../../src/application/auth/AuthError.js'
-import { comparePassword } from '../../src/infrastructure/auth/hashPassword.js'
 
 function makeDb(overrides: Partial<AuthDb> = {}): AuthDb {
   return {
     findUserByEmail: vi.fn().mockResolvedValue(null),
-    createOrgAndUser: vi.fn(
-      async ({ orgName, industry, fullName, email, passwordHash, role, status }) => ({
-        id: 'user-1',
-        organizationId: 'org-1',
-        fullName,
-        email,
-        role,
-        status,
-        passwordHash,
-        orgName,
-        industry,
-      }),
-    ),
+    hashPassword: vi.fn().mockResolvedValue('hashed-password'),
+    createOrgAndUser: vi.fn().mockResolvedValue({
+      id: 'user-1',
+      organizationId: 'org-1',
+      fullName: 'Ada Admin',
+      email: 'ada@acme.com',
+      role: 'admin' as const,
+      status: 'active' as const,
+    }),
     ...overrides,
-  } as AuthDb
+  }
 }
 
 const validInput = {
@@ -63,12 +58,13 @@ describe('registerOrganization', () => {
     await expect(registerOrganization(db, validInput)).rejects.toMatchObject({ status: 409 })
   })
 
-  it('hashes the password before persisting (plaintext never stored)', async () => {
+  it('hashes the password via db.hashPassword before persisting', async () => {
     const db = makeDb()
     await registerOrganization(db, validInput)
+    expect(db.hashPassword).toHaveBeenCalledWith(validInput.password)
     const arg = (db.createOrgAndUser as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(arg.passwordHash).toBe('hashed-password')
     expect(arg.passwordHash).not.toBe(validInput.password)
-    expect(await comparePassword(validInput.password, arg.passwordHash)).toBe(true)
   })
 
   it('returns an AuthUser with role=admin and status=active', async () => {

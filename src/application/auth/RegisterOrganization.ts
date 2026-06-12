@@ -1,4 +1,3 @@
-import { hashPassword } from '../../infrastructure/auth/hashPassword.js'
 import { AuthError } from './AuthError.js'
 import type { AuthUser } from './AuthUser.js'
 
@@ -32,6 +31,7 @@ export interface AuthDb {
     status: 'active' | 'pending' | 'deactivated'
   } | null>
   createOrgAndUser(args: CreateOrgAndUserArgs): Promise<AuthUser>
+  hashPassword(plain: string): Promise<string>
 }
 
 const MIN_LENGTH = 12
@@ -57,9 +57,9 @@ export async function registerOrganization(db: AuthDb, input: RegisterInput): Pr
     throw new AuthError(409, 'Email already registered')
   }
 
-  const passwordHash = await hashPassword(input.password)
+  const passwordHash = await db.hashPassword(input.password)
 
-  const raw = await db.createOrgAndUser({
+  const user = await db.createOrgAndUser({
     orgName: input.organizationName.trim(),
     industry: input.industry,
     fullName: input.fullName.trim(),
@@ -70,11 +70,11 @@ export async function registerOrganization(db: AuthDb, input: RegisterInput): Pr
   })
 
   return {
-    id: raw.id,
-    organizationId: raw.organizationId,
-    fullName: raw.fullName,
-    email: raw.email,
-    role: raw.role,
-    status: raw.status,
+    id: user.id,
+    organizationId: user.organizationId,
+    fullName: user.fullName,
+    email: user.email,
+    role: user.role,
+    status: user.status,
   }
 }
