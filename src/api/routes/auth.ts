@@ -8,7 +8,7 @@ import { AuthError } from '../../application/auth/AuthError.js'
 import type { AuthUser } from '../../application/auth/AuthUser.js'
 import { signToken } from '../../infrastructure/auth/jwtService.js'
 import { hashPassword, comparePassword } from '../../infrastructure/auth/hashPassword.js'
-import { authenticate, AUTH_COOKIE } from '../middleware/authenticate.js'
+import { AUTH_COOKIE } from '../middleware/authenticate.js'
 import type { CookieOptions } from 'express'
 
 const COOKIE_OPTIONS: CookieOptions = {
@@ -121,7 +121,7 @@ export function createAuthRouter() {
     res.json({ ok: true })
   })
 
-  router.get('/me', authenticate, async (req, res) => {
+  router.get('/me', async (req, res) => {
     if (!req.user) {
       res.status(401).json({ error: 'Not authenticated' })
       return
