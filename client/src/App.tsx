@@ -1,6 +1,7 @@
 import { AnimatePresence } from 'framer-motion'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { ProtectedRoute } from './components/ProtectedRoute'
 import { ParsersPage } from './pages/ParsersPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { SettingsPage } from './pages/SettingsPage'
@@ -10,6 +11,8 @@ import { JobsPage } from './pages/JobsPage'
 import { JobDetailPage } from './pages/JobDetailPage'
 import { TaskDetailPage } from './pages/TaskDetailPage'
 import { ParserDetailPage } from './pages/ParserDetailPage'
+import { LoginPage } from './pages/LoginPage'
+import { RegisterPage } from './pages/RegisterPage'
 import { PageTransition } from './components/motion/PageTransition'
 
 function AnimatedRoutes() {
@@ -36,8 +39,19 @@ function AnimatedRoutes() {
 
 export default function App() {
   return (
-    <Layout>
-      <AnimatedRoutes />
-    </Layout>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AnimatedRoutes />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   )
 }
