@@ -96,7 +96,10 @@ export class DebugStepRunner extends EventEmitter {
 
     return new Promise((resolve, reject) => {
       this.pendingReject = reject
-      const worker = new Worker(entryFile, { workerData })
+      const worker = new Worker(entryFile, {
+        workerData,
+        resourceLimits: { maxOldGenerationSizeMb: 512, maxYoungGenerationSizeMb: 128 },
+      })
       this.worker = worker
 
       worker.on('message', (msg: WorkerOutMessage) => {
