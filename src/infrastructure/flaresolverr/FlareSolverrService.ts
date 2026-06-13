@@ -29,11 +29,16 @@ export function makeSolveCFSnippet(flareSolverrUrl: string): string {
 const solveCF = async (url) => {
   const __fsUrl = ${JSON.stringify(flareSolverrUrl)};
   if (!__fsUrl) throw new Error('solveCF: FLARESOLVERR_URL env var not set — start FlareSolverr and add it to .env');
-  const __res = await fetch(__fsUrl + '/v1', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cmd: 'request.get', url, maxTimeout: 60000 })
-  });
+  let __res;
+  try {
+    __res = await fetch(__fsUrl + '/v1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cmd: 'request.get', url, maxTimeout: 60000 })
+    });
+  } catch (__e) {
+    throw new Error('solveCF: cannot reach FlareSolverr at ' + __fsUrl + ' — is it running? docker run -d -p 8191:8191 ghcr.io/flaresolverr/flaresolverr');
+  }
   if (!__res.ok) throw new Error('solveCF: FlareSolverr HTTP error ' + __res.status);
   const __data = await __res.json();
   if (typeof __data.solution?.response === 'string' && __data.solution.response.length > 10_000_000) {
