@@ -31,12 +31,28 @@ export function ParserEditorPage() {
   const { parserId: parserIdParam } = useParams<{ parserId: string }>()
   const parserId = parserIdParam ?? ''
   const { settings } = useSettings()
-  const monacoTheme = settings.theme === 'dark' || (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'vs-dark' : 'light'
+  const monacoTheme =
+    settings.theme === 'dark' ||
+    (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+      ? 'vs-dark'
+      : 'light'
 
   const {
-    parser, steps, selectedStep, selectedStepName, code,
-    saveStatus, loading, error,
-    selectStep, handleCodeChange, saveNow, addStep, removeStep, saveParserSettings, saveStepMeta,
+    parser,
+    steps,
+    selectedStep,
+    selectedStepName,
+    code,
+    saveStatus,
+    loading,
+    error,
+    selectStep,
+    handleCodeChange,
+    saveNow,
+    addStep,
+    removeStep,
+    saveParserSettings,
+    saveStepMeta,
   } = useParserEditor(parserId)
 
   const [newParserName, setNewParserName] = useState('')
@@ -57,7 +73,14 @@ export function ParserEditorPage() {
   const [showStepSettings, setShowStepSettings] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
 
-  const saveStatusLabel = saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : saveStatus === 'error' ? 'Save failed' : ''
+  const saveStatusLabel =
+    saveStatus === 'saving'
+      ? 'Saving...'
+      : saveStatus === 'saved'
+        ? 'Saved'
+        : saveStatus === 'error'
+          ? 'Save failed'
+          : ''
 
   // New parser creation form
   if (!parserId) {
@@ -106,13 +129,21 @@ export function ParserEditorPage() {
           initial="hidden"
           animate="show"
         >
-
           {/* Name */}
           <motion.div variants={staggerItemVariants}>
-            <label className={labelClass}>Name <span className="text-red-500">*</span></label>
+            <label className={labelClass}>
+              Name <span className="text-red-500">*</span>
+            </label>
             <input
               value={newParserName}
-              onChange={(e) => setNewParserName(e.target.value)}
+              onChange={(e) =>
+                setNewParserName(
+                  e.target.value
+                    .toLowerCase()
+                    .replace(/\s+/g, '-')
+                    .replace(/[^a-z0-9_-]/g, ''),
+                )
+              }
               onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
               placeholder="my-parser"
               className={fieldClass}
@@ -161,7 +192,8 @@ export function ParserEditorPage() {
             </div>
             <div>
               <label className={labelClass}>
-                Concurrent Quota <span className="font-normal text-gray-400 text-xs">(blank = ∞)</span>
+                Concurrent Quota{' '}
+                <span className="font-normal text-gray-400 text-xs">(blank = ∞)</span>
               </label>
               <input
                 type="number"
@@ -197,7 +229,9 @@ export function ParserEditorPage() {
                 <JsonEditor
                   value={newParserBrowserJson}
                   onChange={setNewParserBrowserJson}
-                  placeholder={'{\n  "userAgent": "Mozilla/5.0 ...",\n  "contextOptions": { "locale": "en-US" }\n}'}
+                  placeholder={
+                    '{\n  "userAgent": "Mozilla/5.0 ...",\n  "contextOptions": { "locale": "en-US" }\n}'
+                  }
                 />
               </div>
             </details>
@@ -219,7 +253,6 @@ export function ParserEditorPage() {
               {creating ? 'Creating...' : 'Create Parser'}
             </button>
           </motion.div>
-
         </motion.div>
       </div>
     )
@@ -233,7 +266,12 @@ export function ParserEditorPage() {
     return (
       <div className="px-8 py-8">
         <p className="text-red-500">{error}</p>
-        <button onClick={() => navigate('/parsers')} className="mt-4 text-sm text-emerald-600 hover:underline">← Back to parsers</button>
+        <button
+          onClick={() => navigate('/parsers')}
+          className="mt-4 text-sm text-emerald-600 hover:underline"
+        >
+          ← Back to parsers
+        </button>
       </div>
     )
   }
@@ -242,7 +280,12 @@ export function ParserEditorPage() {
     <div className="flex flex-col h-full">
       {/* Header row 1: name + entry URL + actions */}
       <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-2 flex items-center gap-4">
-        <button onClick={() => navigate(`/parsers/${parserId}`)} className="text-sm text-gray-400 hover:text-gray-900 dark:hover:text-white shrink-0">←</button>
+        <button
+          onClick={() => navigate(`/parsers/${parserId}`)}
+          className="text-sm text-gray-400 hover:text-gray-900 dark:hover:text-white shrink-0"
+        >
+          ←
+        </button>
         <span className="font-bold text-sm shrink-0">{parser?.name}</span>
         <div className="flex items-center gap-2 flex-1 mx-2">
           <label className="text-xs text-gray-500 shrink-0">Entry URL</label>
@@ -358,7 +401,10 @@ export function ParserEditorPage() {
               </select>
               <div className="flex gap-1">
                 <button
-                  onClick={() => { setAddingStep(false); setNewStepName('') }}
+                  onClick={() => {
+                    setAddingStep(false)
+                    setNewStepName('')
+                  }}
                   className="flex-1 text-xs py-1 rounded border border-gray-300 dark:border-gray-700 text-gray-500"
                 >
                   Cancel
@@ -366,7 +412,8 @@ export function ParserEditorPage() {
                 <button
                   disabled={!newStepName}
                   onClick={async () => {
-                    const tmpl = newStepType === 'traverser' ? TRAVERSER_TEMPLATE : EXTRACTOR_TEMPLATE
+                    const tmpl =
+                      newStepType === 'traverser' ? TRAVERSER_TEMPLATE : EXTRACTOR_TEMPLATE
                     // Pass template into addStep so it's saved atomically before
                     // selectedStepName state update is batched by React
                     await addStep(newStepName, newStepType, tmpl)
@@ -389,7 +436,10 @@ export function ParserEditorPage() {
                 initial="hidden"
                 animate="show"
                 exit={{ opacity: 0, x: -16, transition: { duration: 0.18 } }}
-                onClick={() => { setShowHistory(false); selectStep(s.name) }}
+                onClick={() => {
+                  setShowHistory(false)
+                  selectStep(s.name)
+                }}
                 className={[
                   'group relative flex items-center justify-between px-3 py-2 cursor-pointer text-xs border-b border-gray-100 dark:border-gray-800',
                   selectedStepName === s.name
@@ -410,7 +460,10 @@ export function ParserEditorPage() {
                   <div className="text-gray-400 dark:text-gray-500">{s.type}</div>
                 </div>
                 <button
-                  onClick={(e) => { e.stopPropagation(); removeStep(s.name) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removeStep(s.name)
+                  }}
                   className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity text-base leading-none"
                   title="Delete step"
                 >
@@ -427,12 +480,16 @@ export function ParserEditorPage() {
             <>
               {/* Step meta bar */}
               <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-1.5 flex items-center gap-3 text-xs text-gray-500">
-                <span className="font-medium text-gray-700 dark:text-gray-300">{selectedStep.name}</span>
-                <span className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800">{selectedStep.type}</span>
+                <span className="font-medium text-gray-700 dark:text-gray-300">
+                  {selectedStep.name}
+                </span>
+                <span className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800">
+                  {selectedStep.type}
+                </span>
                 <div className="ml-auto flex items-center gap-2">
                   <select
                     onChange={(e) => {
-                      const t = STEP_TEMPLATES.find(tmpl => tmpl.label === e.target.value)
+                      const t = STEP_TEMPLATES.find((tmpl) => tmpl.label === e.target.value)
                       if (t && confirm(`Replace current code with template "${t.label}"?`)) {
                         handleCodeChange(t.code)
                       }
@@ -442,10 +499,11 @@ export function ParserEditorPage() {
                     className="px-2 py-0.5 text-xs rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
                   >
                     <option value="">Templates…</option>
-                    {STEP_TEMPLATES
-                      .filter(t => t.type === selectedStep.type)
-                      .map(t => <option key={t.label} value={t.label}>{t.label}</option>)
-                    }
+                    {STEP_TEMPLATES.filter((t) => t.type === selectedStep.type).map((t) => (
+                      <option key={t.label} value={t.label}>
+                        {t.label}
+                      </option>
+                    ))}
                   </select>
                   <button
                     onClick={() => setShowHistory((v) => !v)}
@@ -477,13 +535,21 @@ export function ParserEditorPage() {
                     onChange={(v) => handleCodeChange(v ?? '')}
                     beforeMount={registerPlaywrightCompletions}
                     onMount={(editor) => {
-                      editor.getDomNode()?.addEventListener('keydown', (e: KeyboardEvent) => {
-                        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          editor.getAction('editor.action.formatDocument')?.run()
-                        }
-                      }, { capture: true })
+                      editor.getDomNode()?.addEventListener(
+                        'keydown',
+                        (e: KeyboardEvent) => {
+                          if (
+                            (e.metaKey || e.ctrlKey) &&
+                            e.shiftKey &&
+                            e.key.toLowerCase() === 'f'
+                          ) {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            editor.getAction('editor.action.formatDocument')?.run()
+                          }
+                        },
+                        { capture: true },
+                      )
                     }}
                     options={{
                       minimap: { enabled: false },
@@ -517,7 +583,10 @@ export function ParserEditorPage() {
                   <StepVersionsPanel
                     parserId={parserId}
                     stepName={selectedStep.name}
-                    onRestored={(code) => { handleCodeChange(code); setShowHistory(false) }}
+                    onRestored={(code) => {
+                      handleCodeChange(code)
+                      setShowHistory(false)
+                    }}
                     onClose={() => setShowHistory(false)}
                   />
                 )}
