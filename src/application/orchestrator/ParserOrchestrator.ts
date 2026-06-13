@@ -235,7 +235,10 @@ export class ParserOrchestrator extends EventEmitter {
             browserSettings: this.config.browserSettings,
           }
 
-    const worker = new Worker(entryFile, { workerData: wData })
+    const worker = new Worker(entryFile, {
+      workerData: wData,
+      resourceLimits: { maxOldGenerationSizeMb: 512, maxYoungGenerationSizeMb: 128 },
+    })
     worker.on('message', (msg: WorkerOutMessage) => {
       this.handleWorkerMessage(msg).catch((err) =>
         console.error('[orchestrator] handler failed', err),
