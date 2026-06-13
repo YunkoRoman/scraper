@@ -198,10 +198,7 @@ export class ParserOrchestrator extends EventEmitter {
         : resolve(__dirname, '../../infrastructure/worker/ExtractorWorker.js')
 
     const entryFile = isTsx ? bootstrapFile : jsWorkerFile
-    const outputFile =
-      step.type === 'extractor'
-        ? (step as import('../../domain/entities/Extractor.js').Extractor).outputFile
-        : undefined
+    const outputFile = step.outputFile
 
     const wData = hasFilePath
       ? isTsx
@@ -449,6 +446,10 @@ export class ParserOrchestrator extends EventEmitter {
     }
     const resolvedFile = resolveOutputFileName(outputFile, format)
     const filePath = resolve(this.outputDir, resolvedFile)
+    if (!filePath.startsWith(this.outputDir + '/')) {
+      console.error(`[orchestrator] rejected out-of-bounds outputFile: ${outputFile}`)
+      return
+    }
     if (!this.csvWriters.has(filePath)) {
       this.csvWriters.set(filePath, createOutputWriter(format, filePath))
     }
