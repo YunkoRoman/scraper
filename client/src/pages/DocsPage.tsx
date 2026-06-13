@@ -10,12 +10,12 @@ function Code({ children }: { children: string }) {
   }
   return (
     <div className="relative group my-3">
-      <pre className="bg-gray-950 dark:bg-black border border-gray-800 rounded-lg p-4 overflow-x-auto text-[13px] leading-relaxed text-gray-300 font-mono">
+      <pre className="bg-gray-900 dark:bg-black border border-gray-700 dark:border-gray-800 rounded-lg p-4 overflow-x-auto text-[13px] leading-relaxed text-gray-200 dark:text-gray-300 font-mono">
         {children.trim()}
       </pre>
       <button
         onClick={copy}
-        className="absolute top-2.5 right-2.5 px-2 py-1 text-[11px] rounded bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition-all opacity-0 group-hover:opacity-100"
+        className="absolute top-2.5 right-2.5 px-2 py-1 text-[11px] rounded bg-gray-700 dark:bg-gray-800 text-gray-300 dark:text-gray-400 hover:text-white hover:bg-gray-600 dark:hover:bg-gray-700 transition-all opacity-0 group-hover:opacity-100"
       >
         {copied ? 'Copied!' : 'Copy'}
       </button>
@@ -25,16 +25,23 @@ function Code({ children }: { children: string }) {
 
 // ─── Badge ────────────────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<string, string> = {
-  string: 'bg-sky-900/40 text-sky-300 border-sky-800/50',
-  number: 'bg-amber-900/40 text-amber-300 border-amber-800/50',
-  boolean: 'bg-purple-900/40 text-purple-300 border-purple-800/50',
-  object: 'bg-emerald-900/40 text-emerald-300 border-emerald-800/50',
-  array: 'bg-rose-900/40 text-rose-300 border-rose-800/50',
-  enum: 'bg-indigo-900/40 text-indigo-300 border-indigo-800/50',
+  string:
+    'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-900/40 dark:text-sky-300 dark:border-sky-800/50',
+  number:
+    'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800/50',
+  boolean:
+    'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/40 dark:text-purple-300 dark:border-purple-800/50',
+  object:
+    'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-800/50',
+  array:
+    'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/40 dark:text-rose-300 dark:border-rose-800/50',
+  enum: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-800/50',
 }
 
 function Badge({ type }: { type: string }) {
-  const cls = TYPE_COLORS[type] ?? 'bg-gray-800 text-gray-400 border-gray-700'
+  const cls =
+    TYPE_COLORS[type] ??
+    'bg-gray-100 text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700'
   return (
     <span
       className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono border ${cls}`}
@@ -59,22 +66,22 @@ function Prop({
   optional?: boolean
 }) {
   return (
-    <div className="py-3 border-b border-gray-800/60 last:border-0">
+    <div className="py-3 border-b border-gray-200 dark:border-gray-800/60 last:border-0">
       <div className="flex flex-wrap items-center gap-2 mb-1">
-        <code className="text-[13px] font-mono text-white">{name}</code>
+        <code className="text-[13px] font-mono text-gray-900 dark:text-white">{name}</code>
         {!optional && (
-          <span className="text-[10px] font-bold uppercase tracking-wider text-red-400">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-red-600 dark:text-red-400">
             required
           </span>
         )}
         <Badge type={type} />
         {defaultVal && (
-          <span className="text-[11px] text-gray-500">
-            default: <code className="text-gray-400">{defaultVal}</code>
+          <span className="text-[11px] text-gray-500 dark:text-gray-500">
+            default: <code className="text-gray-600 dark:text-gray-400">{defaultVal}</code>
           </span>
         )}
       </div>
-      <p className="text-[13px] text-gray-400 leading-relaxed">{children}</p>
+      <p className="text-[13px] text-gray-600 dark:text-gray-400 leading-relaxed">{children}</p>
     </div>
   )
 }
@@ -91,7 +98,7 @@ function Section({
 }) {
   return (
     <section id={id} className="mb-12 scroll-mt-6">
-      <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+      <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
         <span className="w-1 h-5 bg-emerald-500 rounded-full inline-block" />
         {title}
       </h2>
@@ -111,14 +118,16 @@ function SubSection({
 }) {
   return (
     <div id={id} className="mb-8 scroll-mt-6">
-      <h3 className="text-[15px] font-semibold text-gray-200 mb-3">{title}</h3>
+      <h3 className="text-[15px] font-semibold text-gray-800 dark:text-gray-200 mb-3">{title}</h3>
       {children}
     </div>
   )
 }
 
 function P({ children }: { children: React.ReactNode }) {
-  return <p className="text-[13px] text-gray-400 leading-relaxed mb-3">{children}</p>
+  return (
+    <p className="text-[13px] text-gray-600 dark:text-gray-400 leading-relaxed mb-3">{children}</p>
+  )
 }
 
 function CalloutBox({
@@ -131,9 +140,11 @@ function CalloutBox({
   color?: 'emerald' | 'amber' | 'blue'
 }) {
   const styles = {
-    emerald: 'bg-emerald-950/40 border-emerald-800/50 text-emerald-300',
-    amber: 'bg-amber-950/40 border-amber-800/50 text-amber-300',
-    blue: 'bg-blue-950/40 border-blue-800/50 text-blue-300',
+    emerald:
+      'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/50 dark:text-emerald-300',
+    amber:
+      'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/40 dark:border-amber-800/50 dark:text-amber-300',
+    blue: 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800/50 dark:text-blue-300',
   }
   return (
     <div className={`border rounded-lg p-4 my-4 ${styles[color]}`}>
@@ -181,8 +192,8 @@ export function DocsPage() {
   return (
     <div className="flex min-h-full">
       {/* Sidebar nav */}
-      <aside className="w-52 shrink-0 sticky top-0 h-screen overflow-y-auto border-r border-gray-800 px-3 py-6 hidden md:block">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500 px-2 mb-3">
+      <aside className="w-52 shrink-0 sticky top-0 h-screen overflow-y-auto border-r border-gray-200 dark:border-gray-800 px-3 py-6 hidden md:block">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 px-2 mb-3">
           Reference
         </p>
         <nav className="space-y-0.5">
@@ -193,8 +204,8 @@ export function DocsPage() {
               className={[
                 'w-full text-left px-2 py-1.5 rounded text-[13px] transition-colors',
                 active === id
-                  ? 'bg-emerald-900/30 text-emerald-300 font-medium'
-                  : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50',
+                  ? 'bg-emerald-50 text-emerald-700 font-medium dark:bg-emerald-900/30 dark:text-emerald-300'
+                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-800/50',
               ].join(' ')}
             >
               {label}
@@ -206,8 +217,10 @@ export function DocsPage() {
       {/* Content */}
       <div className="flex-1 min-w-0 px-8 py-8 max-w-3xl">
         <div className="mb-10">
-          <h1 className="text-2xl font-bold text-white mb-2">Developer Reference</h1>
-          <p className="text-[14px] text-gray-400">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            Developer Reference
+          </h1>
+          <p className="text-[14px] text-gray-600 dark:text-gray-400">
             Everything available when writing Traverser and Extractor step code.
           </p>
         </div>
@@ -221,9 +234,11 @@ export function DocsPage() {
 
           <SubSection id="context-page" title="page">
             <P>
-              A Playwright (or Puppeteer) <code className="text-emerald-400 text-[12px]">Page</code>{' '}
+              A Playwright (or Puppeteer){' '}
+              <code className="text-emerald-600 dark:text-emerald-400 text-[12px]">Page</code>{' '}
               object for the current URL. The browser has already navigated to{' '}
-              <code className="text-emerald-400 text-[12px]">task.url</code> before your code runs.
+              <code className="text-emerald-600 dark:text-emerald-400 text-[12px]">task.url</code>{' '}
+              before your code runs.
             </P>
             <Code>
               {`// Query elements
@@ -255,18 +270,18 @@ console.log('screenshot size:', buf.length)`}
 
           <SubSection id="context-task" title="task">
             <P>Metadata about the current page task being processed.</P>
-            <div className="border border-gray-800 rounded-lg overflow-hidden mb-3">
+            <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden mb-3">
               <Prop name="task.url" type="string" optional={false}>
                 The URL this task navigated to. Same as{' '}
-                <code className="text-gray-300 text-[12px]">page.url()</code> but available before
-                navigation.
+                <code className="text-gray-600 dark:text-gray-300 text-[12px]">page.url()</code> but
+                available before navigation.
               </Prop>
               <Prop name="task.id" type="string" optional={false}>
                 Unique task ID (UUID). Useful for logging.
               </Prop>
               <Prop name="task.stepName" type="string" optional={false}>
                 Name of the step executing this task (e.g.{' '}
-                <code className="text-gray-300 text-[12px]">"Index"</code>).
+                <code className="text-gray-600 dark:text-gray-300 text-[12px]">"Index"</code>).
               </Prop>
               <Prop name="task.parent_data" type="object" defaultVal="{}">
                 Data passed down from the parent traverser. Use to carry context through the
@@ -295,15 +310,17 @@ if (task.attempts === 1) {
             <P>
               Bypasses Cloudflare managed challenges by routing the request through a FlareSolverr
               or Byparr instance. Returns the full{' '}
-              <code className="text-emerald-400 text-[12px]">solution</code> object.
+              <code className="text-emerald-600 dark:text-emerald-400 text-[12px]">solution</code>{' '}
+              object.
             </P>
-            <div className="border border-gray-800 rounded-lg overflow-hidden mb-3">
+            <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden mb-3">
               <Prop name="url" type="string" optional={false}>
                 The URL to fetch through the solver.
               </Prop>
               <Prop name="options" type="object" defaultVal="{}">
                 Any FlareSolverr/Byparr{' '}
-                <code className="text-gray-300 text-[12px]">request.get</code> parameters. See{' '}
+                <code className="text-gray-600 dark:text-gray-300 text-[12px]">request.get</code>{' '}
+                parameters. See{' '}
                 <a href="#cloudflare-bypass" className="text-emerald-400 hover:underline">
                   Cloudflare Bypass
                 </a>{' '}
@@ -324,9 +341,9 @@ const { response, cookies } = await solveCF(task.url, {
 await page.setContent(response)`}
             </Code>
             <CalloutBox title="Requires setup" color="amber">
-              Set <code>FLARESOLVERR_URL</code> in your <code>.env</code>, or set{' '}
-              <code>flareSolverrUrl</code> in parser/step settings. Without it, calling{' '}
-              <code>solveCF()</code> throws a descriptive error.
+              Set the <strong>Cloudflare Solver URL</strong> in the Parser Settings modal, or set{' '}
+              <code>flareSolverrUrl</code> in step settings to override per-step. Without a solver
+              URL, calling <code>solveCF()</code> throws a descriptive error.
             </CalloutBox>
           </SubSection>
         </Section>
@@ -335,16 +352,16 @@ await page.setContent(response)`}
         <Section id="step-types" title="Step Types">
           <P>
             A parser pipeline is a chain of steps. Each step is either a{' '}
-            <strong className="text-white">Traverser</strong> (discovers more URLs) or an{' '}
-            <strong className="text-white">Extractor</strong> (collects data). You choose the type
-            when creating a step.
+            <strong className="text-gray-900 dark:text-white">Traverser</strong> (discovers more
+            URLs) or an <strong className="text-gray-900 dark:text-white">Extractor</strong>{' '}
+            (collects data). You choose the type when creating a step.
           </P>
 
           <SubSection id="types-traverser" title="Traverser">
             <P>
               Returns an array of links for the next step to process. The{' '}
-              <code className="text-emerald-400 text-[12px]">page_type</code> field must match the
-              name of an existing step.
+              <code className="text-emerald-600 dark:text-emerald-400 text-[12px]">page_type</code>{' '}
+              field must match the name of an existing step.
             </P>
             <Code>
               {`// Return type: TraverserResult[]
@@ -396,14 +413,14 @@ return [
             override parser-level browser settings.
           </P>
 
-          <div className="border border-gray-800 rounded-lg overflow-hidden">
+          <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
             <Prop name="concurrency" type="number" defaultVal="3">
               Number of pages this step processes in parallel. Higher values speed up scraping but
               increase detection risk.
             </Prop>
             <Prop name="pageDelayMin" type="number" defaultVal="0">
               Minimum delay in milliseconds between page requests. Randomized up to{' '}
-              <code className="text-gray-300 text-[12px]">pageDelayMax</code>.
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">pageDelayMax</code>.
             </Prop>
             <Prop name="pageDelayMax" type="number" defaultVal="0">
               Maximum delay in milliseconds between page requests. Set both min and max to add
@@ -411,7 +428,8 @@ return [
             </Prop>
             <Prop name="maxPagesPerContext" type="number" defaultVal="0">
               Rotate the browser context (new cookies, fingerprint) after this many pages.
-              <code className="text-gray-300 text-[12px]">0</code> = never rotate.
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">0</code> = never
+              rotate.
             </Prop>
             <Prop name="userAgent" type="string">
               Override the browser's user agent string for every request in this step.
@@ -419,44 +437,56 @@ return [
             <Prop name="initScripts" type="array">
               JavaScript strings injected into every page before load. Runs before CSP is enforced —
               useful for patching{' '}
-              <code className="text-gray-300 text-[12px]">navigator.webdriver</code> etc.
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">
+                navigator.webdriver
+              </code>{' '}
+              etc.
             </Prop>
             <Prop name="contextOptions" type="object">
-              Playwright <code className="text-gray-300 text-[12px]">BrowserContextOptions</code>:{' '}
-              <code className="text-gray-300 text-[12px]">locale</code>,{' '}
-              <code className="text-gray-300 text-[12px]">timezoneId</code>,{' '}
-              <code className="text-gray-300 text-[12px]">viewport</code>,{' '}
-              <code className="text-gray-300 text-[12px]">extraHTTPHeaders</code>, etc.
+              Playwright{' '}
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">
+                BrowserContextOptions
+              </code>
+              : <code className="text-gray-600 dark:text-gray-300 text-[12px]">locale</code>,{' '}
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">timezoneId</code>,{' '}
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">viewport</code>,{' '}
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">extraHTTPHeaders</code>
+              , etc.
             </Prop>
             <Prop name="launchOptions" type="object">
-              Playwright <code className="text-gray-300 text-[12px]">LaunchOptions</code>:{' '}
-              <code className="text-gray-300 text-[12px]">headless</code>,{' '}
-              <code className="text-gray-300 text-[12px]">args</code>, etc. Set{' '}
-              <code className="text-gray-300 text-[12px]">headless: false</code> to debug locally.
+              Playwright{' '}
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">LaunchOptions</code>:{' '}
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">headless</code>,{' '}
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">args</code>, etc. Set{' '}
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">headless: false</code>{' '}
+              to debug locally.
             </Prop>
             <Prop name="proxySettings" type="object">
               Single proxy:{' '}
-              <code className="text-gray-300 text-[12px]">
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">
                 {'{ host, port, username?, password? }'}
               </code>
               . Applied to every request in this step.
             </Prop>
             <Prop name="proxyPool" type="array">
               Array of proxy URLs (
-              <code className="text-gray-300 text-[12px]">http://user:pass@host:port</code>) used in
-              round-robin. Overrides{' '}
-              <code className="text-gray-300 text-[12px]">proxySettings</code> when set.
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">
+                http://user:pass@host:port
+              </code>
+              ) used in round-robin. Overrides{' '}
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">proxySettings</code>{' '}
+              when set.
             </Prop>
             <Prop name="flareSolverrUrl" type="string">
               Override the Cloudflare solver endpoint for this step. Takes priority over{' '}
-              <code className="text-gray-300 text-[12px]">FLARESOLVERR_URL</code> env var and
-              parser-level setting.
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">FLARESOLVERR_URL</code>{' '}
+              env var and parser-level setting.
             </Prop>
             <Prop name="outputFormat" type="enum" defaultVal="csv">
               Output file format for Extractor steps:{' '}
-              <code className="text-gray-300 text-[12px]">'csv'</code> |{' '}
-              <code className="text-gray-300 text-[12px]">'json'</code> |{' '}
-              <code className="text-gray-300 text-[12px]">'excel'</code>.
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">'csv'</code> |{' '}
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">'json'</code> |{' '}
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">'excel'</code>.
             </Prop>
           </div>
 
@@ -488,11 +518,13 @@ return [
         <Section id="browser-settings" title="Browser Settings">
           <P>
             Parser-level settings applied to all steps unless overridden. Configured in the Parser
-            Settings modal → <strong className="text-gray-200">Browser Settings</strong> JSON field.
+            Settings modal →{' '}
+            <strong className="text-gray-700 dark:text-gray-200">Browser Settings</strong> JSON
+            field.
           </P>
 
           <SubSection id="browser-type" title="browser_type">
-            <div className="border border-gray-800 rounded-lg overflow-hidden mb-3">
+            <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden mb-3">
               <Prop name="browser_type" type="enum" defaultVal="playwright">
                 Which browser adapter to use for all steps in this parser.
               </Prop>
@@ -522,7 +554,7 @@ return [
         <Section id="parser-settings" title="Parser Settings">
           <P>Configured in the Parser Settings modal. Apply to the whole parser run.</P>
 
-          <div className="border border-gray-800 rounded-lg overflow-hidden">
+          <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
             <Prop name="retryConfig.maxRetries" type="number" defaultVal="0">
               How many times to retry a failed task before marking it permanently failed. Each retry
               re-navigates to the URL.
@@ -535,10 +567,21 @@ return [
               Maximum total concurrent tasks across all steps. Unlimited if blank. Use to throttle
               overall resource usage.
             </Prop>
+            <Prop name="flareSolverrUrl" type="string">
+              URL of the FlareSolverr or Byparr solver for this parser (e.g.{' '}
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">
+                http://localhost:8191
+              </code>
+              ). Set via the{' '}
+              <strong className="text-gray-700 dark:text-gray-200">Cloudflare Solver URL</strong>{' '}
+              field in the Parser Settings modal. Step-level{' '}
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">flareSolverrUrl</code>{' '}
+              overrides this.
+            </Prop>
             <Prop name="browserSettings" type="object">
               Parser-level browser config. Any{' '}
-              <code className="text-gray-300 text-[12px]">StepSettings</code> field is valid here.
-              Overridden per-step by step settings.
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">StepSettings</code>{' '}
+              field is valid here. Overridden per-step by step settings.
             </Prop>
           </div>
         </Section>
@@ -546,13 +589,19 @@ return [
         {/* ── Cloudflare Bypass ─────────────────────────────────────────── */}
         <Section id="cloudflare-bypass" title="Cloudflare Bypass">
           <P>
-            The <code className="text-emerald-400 text-[12px]">solveCF(url, options?)</code> helper
-            routes requests through a local FlareSolverr or Byparr instance that runs a real browser
-            to solve Cloudflare managed challenges.
+            The{' '}
+            <code className="text-emerald-600 dark:text-emerald-400 text-[12px]">
+              solveCF(url, options?)
+            </code>{' '}
+            helper routes requests through a local FlareSolverr or Byparr instance that runs a real
+            browser to solve Cloudflare managed challenges.
           </P>
 
           <SubSection id="cf-setup" title="Setup">
-            <P>Start a solver with Docker:</P>
+            <P>
+              <strong className="text-gray-700 dark:text-gray-200">Step 1</strong> — Start a solver
+              with Docker:
+            </P>
             <Code>
               {`# FlareSolverr
 docker run -d -p 8191:8191 ghcr.io/flaresolverr/flaresolverr:latest
@@ -561,18 +610,26 @@ docker run -d -p 8191:8191 ghcr.io/flaresolverr/flaresolverr:latest
 docker run -d -p 8191:8191 ghcr.io/thephaseless/byparr:latest`}
             </Code>
             <P>
-              Then add to your <code className="text-gray-300 text-[12px]">.env</code>:
+              <strong className="text-gray-700 dark:text-gray-200">Step 2</strong> — Open the{' '}
+              <strong className="text-gray-700 dark:text-gray-200">Parser Settings</strong> modal (⚙
+              General &amp; Browser Settings button in the editor) and paste the solver URL into the{' '}
+              <strong className="text-gray-700 dark:text-gray-200">Cloudflare Solver URL</strong>{' '}
+              field:
             </P>
-            <Code>{`FLARESOLVERR_URL=http://localhost:8191`}</Code>
+            <Code>{`http://localhost:8191`}</Code>
             <P>
-              Or set <code className="text-emerald-400 text-[12px]">flareSolverrUrl</code> in parser
-              browser settings / step settings to point individual parsers at different solver
-              instances.
+              That's it — no{' '}
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">.env</code> changes
+              needed. The URL is saved per-parser. Use{' '}
+              <code className="text-emerald-600 dark:text-emerald-400 text-[12px]">
+                flareSolverrUrl
+              </code>{' '}
+              in step settings to point individual steps at a different solver instance.
             </P>
           </SubSection>
 
           <SubSection id="cf-options" title="solveCF options">
-            <div className="border border-gray-800 rounded-lg overflow-hidden">
+            <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
               <Prop name="maxTimeout" type="number" defaultVal="60000">
                 Max milliseconds to wait for the challenge to be solved.
               </Prop>
@@ -585,16 +642,24 @@ docker run -d -p 8191:8191 ghcr.io/thephaseless/byparr:latest`}
               </Prop>
               <Prop name="cookies" type="array">
                 Inject cookies before the page loads:
-                <code className="text-gray-300 text-[12px]">{' [{ name, value }]'}</code>.
+                <code className="text-gray-600 dark:text-gray-300 text-[12px]">
+                  {' [{ name, value }]'}
+                </code>
+                .
               </Prop>
               <Prop name="returnOnlyCookies" type="boolean" defaultVal="false">
                 Skip returning HTML; only return{' '}
-                <code className="text-gray-300 text-[12px]">solution.cookies</code>. Faster when you
-                only need CF clearance cookies.
+                <code className="text-gray-600 dark:text-gray-300 text-[12px]">
+                  solution.cookies
+                </code>
+                . Faster when you only need CF clearance cookies.
               </Prop>
               <Prop name="returnScreenshot" type="boolean" defaultVal="false">
                 Include a base64 PNG screenshot in{' '}
-                <code className="text-gray-300 text-[12px]">solution.screenshot</code>.
+                <code className="text-gray-600 dark:text-gray-300 text-[12px]">
+                  solution.screenshot
+                </code>
+                .
               </Prop>
               <Prop name="waitInSeconds" type="number">
                 Extra seconds to wait after the challenge resolves before capturing the page. Useful
@@ -605,16 +670,21 @@ docker run -d -p 8191:8191 ghcr.io/thephaseless/byparr:latest`}
               </Prop>
               <Prop name="proxy" type="object">
                 Route the solver's request through a proxy:
-                <code className="text-gray-300 text-[12px]">{' { url: "http://host:port" }'}</code>.
-                Ignored when <code className="text-gray-300 text-[12px]">session</code> is set.
+                <code className="text-gray-600 dark:text-gray-300 text-[12px]">
+                  {' { url: "http://host:port" }'}
+                </code>
+                . Ignored when{' '}
+                <code className="text-gray-600 dark:text-gray-300 text-[12px]">session</code> is
+                set.
               </Prop>
             </div>
           </SubSection>
 
           <SubSection id="cf-response" title="solution object">
             <P>
-              <code className="text-emerald-400 text-[12px]">solveCF()</code> returns the full{' '}
-              <code className="text-gray-300 text-[12px]">solution</code> object:
+              <code className="text-emerald-600 dark:text-emerald-400 text-[12px]">solveCF()</code>{' '}
+              returns the full{' '}
+              <code className="text-gray-600 dark:text-gray-300 text-[12px]">solution</code> object:
             </P>
             <Code>
               {`const solution = await solveCF(task.url)

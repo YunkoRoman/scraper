@@ -44,7 +44,12 @@ const BROWSER_SETTINGS_SCHEMA = `{
     "username": "user",
     "password": "pass"
   }
-}`
+}
+
+// Cloudflare bypass solver (FlareSolverr / Byparr)
+// Start with: docker run -d -p 8191:8191 ghcr.io/flaresolverr/flaresolverr:latest
+// Then set flareSolverrUrl to http://localhost:8191
+// Use solveCF(url) inside step code to bypass Cloudflare`
 
 function SchemaModal({ onClose }: { onClose: () => void }) {
   const backdropRef = useRef<HTMLDivElement>(null)
@@ -57,7 +62,9 @@ function SchemaModal({ onClose }: { onClose: () => void }) {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
       className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm"
-      onMouseDown={(e) => { if (e.target === backdropRef.current) onClose() }}
+      onMouseDown={(e) => {
+        if (e.target === backdropRef.current) onClose()
+      }}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 8 }}
@@ -100,16 +107,21 @@ export function ParserSettingsModal({ parser, steps, onSave, onClose }: Props) {
   const [browserType, setBrowserType] = useState(parser.browserType ?? 'playwright')
   const [maxRetries, setMaxRetries] = useState(String(parser.retryConfig.maxRetries))
   const [concurrentQuota, setConcurrentQuota] = useState(
-    parser.concurrentQuota != null ? String(parser.concurrentQuota) : ''
+    parser.concurrentQuota != null ? String(parser.concurrentQuota) : '',
   )
   const [deduplication, setDeduplication] = useState(parser.deduplication)
   const [proxyPool, setProxyPool] = useState(
     Array.isArray(parser.browserSettings.proxyPool)
       ? (parser.browserSettings.proxyPool as string[]).join('\n')
-      : ''
+      : '',
+  )
+  const [flareSolverrUrl, setFlareSolverrUrl] = useState(
+    typeof parser.browserSettings.flareSolverrUrl === 'string'
+      ? parser.browserSettings.flareSolverrUrl
+      : '',
   )
   const [browserJson, setBrowserJson] = useState(() => {
-    const { proxyPool: _p, ...rest } = parser.browserSettings
+    const { proxyPool: _p, flareSolverrUrl: _f, ...rest } = parser.browserSettings
     return Object.keys(rest).length ? JSON.stringify(rest, null, 2) : ''
   })
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -134,8 +146,13 @@ export function ParserSettingsModal({ parser, steps, onSave, onClose }: Props) {
       return
     }
 
-    const proxyList = proxyPool.split('\n').map((s) => s.trim()).filter(Boolean)
+    const proxyList = proxyPool
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
     if (proxyList.length) browserSettings.proxyPool = proxyList
+    const solverUrl = flareSolverrUrl.trim()
+    if (solverUrl) browserSettings.flareSolverrUrl = solverUrl
 
     setSaveError(null)
     setSaving(true)
@@ -175,7 +192,9 @@ export function ParserSettingsModal({ parser, steps, onSave, onClose }: Props) {
           >
             {steps.length === 0 && <option value="">— none —</option>}
             {steps.map((s) => (
-              <option key={s.name} value={s.name}>{s.name}</option>
+              <option key={s.name} value={s.name}>
+                {s.name}
+              </option>
             ))}
           </select>
         </div>
@@ -209,7 +228,8 @@ export function ParserSettingsModal({ parser, steps, onSave, onClose }: Props) {
           </div>
           <div>
             <label className={labelClass}>
-              Concurrent Quota <span className="font-normal text-gray-400">(blank = unlimited)</span>
+              Concurrent Quota{' '}
+              <span className="font-normal text-gray-400">(blank = unlimited)</span>
             </label>
             <input
               type="number"
@@ -239,7 +259,8 @@ export function ParserSettingsModal({ parser, steps, onSave, onClose }: Props) {
         {/* Proxy Pool */}
         <div>
           <label className={labelClass}>
-            Proxy Pool <span className="font-normal text-gray-400">(one URL per line, round-robin)</span>
+            Proxy Pool{' '}
+            <span className="font-normal text-gray-400">(one URL per line, round-robin)</span>
           </label>
           <textarea
             value={proxyPool}
@@ -250,12 +271,48 @@ export function ParserSettingsModal({ parser, steps, onSave, onClose }: Props) {
           />
         </div>
 
+        {/* Cloudflare Solver URL */}
+        <div>
+          <label className={labelClass}>
+            Cloudflare Solver URL{' '}
+            <span className="font-normal text-gray-400">
+              (FlareSolverr / Byparr — blank = disabled)
+            </span>
+          </label>
+          <input
+            type="url"
+            value={flareSolverrUrl}
+            onChange={(e) => setFlareSolverrUrl(e.target.value)}
+            placeholder="http://localhost:8191"
+            className={`${inputClass} w-full font-mono`}
+          />
+          <p className="mt-1.5 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
+            Start a solver with Docker, then use{' '}
+            <code className="font-mono text-emerald-600 dark:text-emerald-400">solveCF(url)</code>{' '}
+            inside step code to bypass Cloudflare.
+          </p>
+          <div className="mt-1.5 rounded bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3 py-2 text-[11px] font-mono text-gray-500 dark:text-gray-400 space-y-0.5">
+            <div>
+              <span className="text-gray-400 dark:text-gray-600"># FlareSolverr</span>
+            </div>
+            <div>docker run -d -p 8191:8191 ghcr.io/flaresolverr/flaresolverr:latest</div>
+            <div className="pt-1">
+              <span className="text-gray-400 dark:text-gray-600">
+                # Byparr (drop-in, often better CF bypass rate)
+              </span>
+            </div>
+            <div>docker run -d -p 8191:8191 ghcr.io/thephaseless/byparr:latest</div>
+          </div>
+        </div>
+
         {/* Browser Settings JSON */}
         <div>
           <div className="flex items-center gap-2 mb-1">
             <label className={`${labelClass} mb-0`}>
               Browser Settings{' '}
-              <span className="font-normal text-gray-400">(userAgent, contextOptions, initScripts…)</span>
+              <span className="font-normal text-gray-400">
+                (userAgent, contextOptions, initScripts…)
+              </span>
             </label>
             <button
               type="button"
@@ -270,16 +327,15 @@ export function ParserSettingsModal({ parser, steps, onSave, onClose }: Props) {
             value={browserJson}
             onChange={setBrowserJson}
             rows={6}
-            placeholder={'{\n  "userAgent": "Mozilla/5.0 ...",\n  "contextOptions": { "locale": "en-US" }\n}'}
+            placeholder={
+              '{\n  "userAgent": "Mozilla/5.0 ...",\n  "contextOptions": { "locale": "en-US" }\n}'
+            }
           />
         </div>
 
         {/* Error + Save / Cancel */}
         <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-800">
-          {saveError
-            ? <span className="text-xs text-rose-500">{saveError}</span>
-            : <span />
-          }
+          {saveError ? <span className="text-xs text-rose-500">{saveError}</span> : <span />}
           <div className="flex gap-2">
             <button
               onClick={onClose}
