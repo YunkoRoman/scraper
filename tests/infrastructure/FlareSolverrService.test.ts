@@ -4,7 +4,7 @@ import { makeSolveCFSnippet } from '../../src/infrastructure/flaresolverr/FlareS
 describe('makeSolveCFSnippet', () => {
   it('returns a string containing an async solveCF function declaration', () => {
     const snippet = makeSolveCFSnippet('http://localhost:8191')
-    expect(snippet).toContain('async function solveCF')
+    expect(snippet).toContain('const solveCF = async')
   })
 
   it('embeds the provided URL into the snippet', () => {
