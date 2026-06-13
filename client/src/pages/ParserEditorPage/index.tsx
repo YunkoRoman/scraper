@@ -18,11 +18,13 @@ import { staggerItemVariants } from '../../components/motion/StaggerList'
 
 const TRAVERSER_TEMPLATE = `// page: Playwright/Puppeteer Page
 // task: { url: string, parent_data?: Record<string, unknown> }
+// solveCF(url): bypasses Cloudflare — returns HTML string (requires FLARESOLVERR_URL env)
 const items = await page.$$eval('a', els => els.map(el => el.href))
 return items.map(link => ({ link, page_type: 'nextStep', parent_data: {} }))`
 
 const EXTRACTOR_TEMPLATE = `// page: Playwright/Puppeteer Page
 // task: { url: string, parent_data?: Record<string, unknown> }
+// solveCF(url): bypasses Cloudflare — returns HTML string (requires FLARESOLVERR_URL env)
 const title = await page.$eval('h1', el => el.textContent?.trim() ?? '').catch(() => '')
 return [{ title, __url: task.url }]`
 
@@ -517,6 +519,22 @@ export function ParserEditorPage() {
                   />
                 )}
               </AnimatePresence>
+              <div className="px-3 py-1.5 bg-blue-950/40 border-b border-blue-800/30 text-xs text-blue-300 flex items-center gap-2 flex-shrink-0 flex-wrap">
+                <span className="font-mono font-semibold text-blue-200">solveCF(url)</span>
+                <span className="text-blue-400">—</span>
+                <span>bypasses Cloudflare via FlareSolverr, returns page HTML.</span>
+                <code className="font-mono text-blue-200 bg-blue-900/40 px-1 rounded">
+                  {'const html = await solveCF(task.url); await page.setContent(html);'}
+                </code>
+                <a
+                  href="https://github.com/FlareSolverr/FlareSolverr"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto text-blue-500 hover:text-blue-300 transition-colors whitespace-nowrap"
+                >
+                  Setup ↗
+                </a>
+              </div>
               <div className="relative flex flex-1 overflow-hidden min-h-0">
                 <div className="flex-1 overflow-hidden min-w-0">
                   <Editor
