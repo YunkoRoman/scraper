@@ -73,10 +73,7 @@ export class DebugStepRunner extends EventEmitter {
         ? {
             stepCode: step.code!,
             stepType: step.type,
-            outputFile:
-              step.type === 'extractor'
-                ? (step as import('../../domain/entities/Extractor.js').Extractor).outputFile
-                : undefined,
+            outputFile: step.outputFile,
             stepSettings: step.settings,
             stepName,
             __workerPath: tsFile,
@@ -85,10 +82,7 @@ export class DebugStepRunner extends EventEmitter {
         : {
             stepCode: step.code!,
             stepType: step.type,
-            outputFile:
-              step.type === 'extractor'
-                ? (step as import('../../domain/entities/Extractor.js').Extractor).outputFile
-                : undefined,
+            outputFile: step.outputFile,
             stepSettings: step.settings,
             stepName,
             browserSettings: config.browserSettings,

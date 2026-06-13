@@ -16,7 +16,6 @@ import { stepName } from '../../domain/value-objects/StepName.js'
 const data = workerData as WorkerData
 pipeConsole(data.stepName)
 
- 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (
   ...args: string[]
 ) => (...a: any[]) => Promise<any>
@@ -55,9 +54,8 @@ async function rotateAdapter(): Promise<void> {
   adapter = createBrowserAdapter(savedSettings.browser_type, settingsForLaunch)
   await adapter.launch()
   if (savedSettings.initScripts?.length) {
-    const pa = adapter as import('../browser/PlaywrightAdapter.js').PlaywrightAdapter
     for (const script of savedSettings.initScripts) {
-      await pa.addInitScript(script)
+      await adapter.addInitScript(script)
     }
   }
   if (proxyUrl)
@@ -184,9 +182,8 @@ async function main() {
   adapter = createBrowserAdapter(mergedSettings.browser_type, initialSettings)
   await adapter.launch()
   if (mergedSettings.initScripts?.length) {
-    const pa = adapter as import('../browser/PlaywrightAdapter.js').PlaywrightAdapter
     for (const script of mergedSettings.initScripts) {
-      await pa.addInitScript(script)
+      await adapter.addInitScript(script)
     }
   }
 

@@ -18,4 +18,8 @@ export class PuppeteerAdapter implements BrowserAdapter<Page> {
     await this.browser?.close()
     this.browser = null
   }
+
+  async addInitScript(_script: string): Promise<void> {
+    // Puppeteer does not support context-level init scripts via this adapter
+  }
 }
