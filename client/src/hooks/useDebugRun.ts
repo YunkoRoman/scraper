@@ -46,6 +46,7 @@ export function useDebugRun() {
       const res = await fetch(`${API_BASE}/api/parsers/${parserId}/steps/${stepName}/debug`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ url, parent_data }),
         signal: controller.signal,
       })
