@@ -160,7 +160,12 @@ async function main() {
     if (!step) throw new Error(`Step "${data.stepName}" not found in parser "${config.name}"`)
     stepSettings = step.settings
   } else {
-    const solveCFSnippet = makeSolveCFSnippet(process.env.FLARESOLVERR_URL ?? '')
+    const solverUrl =
+      ('stepSettings' in data ? data.stepSettings?.flareSolverrUrl : undefined) ??
+      data.browserSettings?.flareSolverrUrl ??
+      process.env.FLARESOLVERR_URL ??
+      ''
+    const solveCFSnippet = makeSolveCFSnippet(solverUrl)
     const run = new AsyncFunction('page', 'task', solveCFSnippet + '\n' + data.stepCode)
     const { Traverser: T } = await import('../../domain/entities/Traverser.js')
     step = new T(stepName(data.stepName), run, data.stepSettings)

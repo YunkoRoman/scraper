@@ -25,4 +25,6 @@ export interface StepSettings {
   proxySettings?: ProxySettings
   proxyPool?: string[]
   outputFormat?: 'csv' | 'json' | 'excel'
+  /** Override FLARESOLVERR_URL env var — point solveCF() at a specific solver (FlareSolverr or Byparr) */
+  flareSolverrUrl?: string
 }

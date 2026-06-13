@@ -10,6 +10,7 @@ export type BrowserSettings = Pick<
   | 'initScripts'
   | 'userAgent'
   | 'proxySettings'
+  | 'flareSolverrUrl'
 >
 
 export type WorkerData =
