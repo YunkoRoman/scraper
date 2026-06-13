@@ -41,13 +41,13 @@ export function createParsersRouter({
 }: Deps) {
   const router = express.Router()
 
-  router.param('id', async (_req, res, next, id: string) => {
+  router.param('id', async (req, res, next, id: string) => {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
       res.status(404).json({ error: 'Parser not found' })
       return
     }
     const parser = await parserService.findById(id)
-    if (!parser) {
+    if (!parser || parser.organizationId !== req.user!.organizationId) {
       res.status(404).json({ error: 'Parser not found' })
       return
     }
@@ -97,6 +97,7 @@ export function createParsersRouter({
     }
     try {
       const created = await parserService.create({
+        organizationId: req.user!.organizationId,
         name,
         entryUrl: incomingParser.entryUrl,
         entryStep: incomingParser.entryStep,
@@ -143,7 +144,7 @@ export function createParsersRouter({
       : 'name'
     const dir = req.query.dir === 'desc' ? 'desc' : 'asc'
 
-    const raw = await runPersistence.listParsersWithLatestRun(search)
+    const raw = await runPersistence.listParsersWithLatestRun(search, req.user!.organizationId)
 
     // Enrich status from in-memory runner (authoritative for running state)
     const enriched = raw.map((p) => ({
@@ -215,6 +216,7 @@ export function createParsersRouter({
     }
     try {
       const parser = await parserService.create({
+        organizationId: req.user!.organizationId,
         name,
         entryUrl,
         entryStep,

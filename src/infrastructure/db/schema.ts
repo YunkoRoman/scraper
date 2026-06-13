@@ -4,6 +4,7 @@ import { relations } from 'drizzle-orm'
 
 export const parsers = pgTable('parsers', {
   id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().default('00000000-0000-0000-0000-000000000000'),
   name: text('name').notNull().unique(),
   entryUrl: text('entry_url').notNull().default(''),
   entryStep: text('entry_step').notNull().default(''),
@@ -33,8 +34,12 @@ export const steps = pgTable('steps', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
-export const parsersRelations = relations(parsers, ({ many }) => ({
+export const parsersRelations = relations(parsers, ({ many, one }) => ({
   steps: many(steps),
+  organization: one(organizations, {
+    fields: [parsers.organizationId],
+    references: [organizations.id],
+  }),
 }))
 
 export const stepsRelations = relations(steps, ({ one }) => ({
@@ -120,6 +125,7 @@ export const users = pgTable('users', {
 
 export const organizationsRelations = relations(organizations, ({ many }) => ({
   users: many(users),
+  parsers: many(parsers),
 }))
 
 export const usersRelations = relations(users, ({ one }) => ({

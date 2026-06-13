@@ -324,7 +324,7 @@ export class RunPersistenceService extends BasePersistenceService<
       .where(and(eq(runTasks.runId, runId), eq(runTasks.state, 'failed')))
   }
 
-  async listParsersWithLatestRun(search: string): Promise<RawParserEnriched[]> {
+  async listParsersWithLatestRun(search: string, orgId: string): Promise<RawParserEnriched[]> {
     const escaped = (search ?? '').replace(/[%_\\]/g, '\\$&')
     const pattern = `%${escaped}%`
 
@@ -365,6 +365,7 @@ export class RunPersistenceService extends BasePersistenceService<
       LEFT JOIN latest_runs lr  ON lr.parser_name = p.name
       LEFT JOIN run_stats    rs ON rs.run_id = lr.id
       WHERE p.name ILIKE ${pattern}
+        AND p.organization_id = ${orgId}
       ORDER BY p.name ASC
     `)
 
