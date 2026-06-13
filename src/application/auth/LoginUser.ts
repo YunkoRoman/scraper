@@ -14,13 +14,14 @@ export async function loginUser(db: AuthDb, input: LoginInput): Promise<AuthUser
     throw new AuthError(401, 'Invalid email or password')
   }
 
+  // Check status BEFORE running bcrypt (avoids timing side-channel, blocks pending users)
+  if (record.status !== 'active') {
+    throw new AuthError(403, 'Account is not active')
+  }
+
   const ok = await db.comparePassword(input.password, record.passwordHash)
   if (!ok) {
     throw new AuthError(401, 'Invalid email or password')
-  }
-
-  if (record.status === 'deactivated') {
-    throw new AuthError(403, 'Account is deactivated')
   }
 
   return {

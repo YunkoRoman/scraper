@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest'
 import { signToken, verifyToken } from '../../src/infrastructure/auth/jwtService.js'
 
 beforeAll(() => {
-  process.env.JWT_SECRET = 'test-secret-for-vitest'
+  process.env.JWT_SECRET = 'test-secret-for-vitest-at-least-32-chars'
 })
 
 describe('jwtService', () => {

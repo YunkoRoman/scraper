@@ -1,4 +1,21 @@
 import { Router } from 'express'
+import rateLimit from 'express-rate-limit'
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts, please try again later' },
+})
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many registration attempts, please try again later' },
+})
 import { db, pool } from '../../infrastructure/db/client.js'
 import { users } from '../../infrastructure/db/schema.js'
 import { eq, sql } from 'drizzle-orm'
@@ -86,7 +103,7 @@ function issueCookie(res: import('express').Response, user: AuthUser): void {
 export function createAuthRouter() {
   const router = Router()
 
-  router.post('/register', async (req, res) => {
+  router.post('/register', registerLimiter, async (req, res) => {
     try {
       const user = await registerOrganization(authDb, req.body)
       issueCookie(res, user)
@@ -101,7 +118,7 @@ export function createAuthRouter() {
     }
   })
 
-  router.post('/login', async (req, res) => {
+  router.post('/login', loginLimiter, async (req, res) => {
     try {
       const user = await loginUser(authDb, req.body)
       issueCookie(res, user)

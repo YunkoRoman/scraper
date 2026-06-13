@@ -17,6 +17,7 @@ import type { SchedulePersistenceService } from '../../infrastructure/db/Schedul
 import { SchedulerService } from '../../application/services/SchedulerService.js'
 import type { StepVersionPersistenceService } from '../../infrastructure/db/StepVersionPersistenceService.js'
 import { CsvRowReader } from '../../infrastructure/csv/CsvRowReader.js'
+import { requireRole } from '../middleware/requireRole.js'
 
 interface Deps {
   runner: ParserRunnerService
@@ -28,15 +29,27 @@ interface Deps {
   stepVersionService: StepVersionPersistenceService
 }
 
-export function createParsersRouter({ runner, runPersistence, parserService, dbLoader, outputDir, schedulePersistence, stepVersionService }: Deps) {
+export function createParsersRouter({
+  runner,
+  runPersistence,
+  parserService,
+  dbLoader,
+  outputDir,
+  schedulePersistence,
+  stepVersionService,
+}: Deps) {
   const router = express.Router()
 
   router.param('id', async (_req, res, next, id: string) => {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-      res.status(404).json({ error: 'Parser not found' }); return
+      res.status(404).json({ error: 'Parser not found' })
+      return
     }
     const parser = await parserService.findById(id)
-    if (!parser) { res.status(404).json({ error: 'Parser not found' }); return }
+    if (!parser) {
+      res.status(404).json({ error: 'Parser not found' })
+      return
+    }
     res.locals.parser = parser
     next()
   })
@@ -44,12 +57,36 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
   // ── Parser CRUD ─────────────────────────────────────────────────────────────
 
   router.post('/import', async (req, res) => {
-    const { parser: incomingParser, steps: incomingSteps, newName } = req.body as {
-      parser: { name: string; entryUrl?: string; entryStep?: string; browserType?: string; browserSettings?: object; retryConfig?: { maxRetries: number }; deduplication?: boolean; concurrentQuota?: number | null }
-      steps: { name: string; type: 'traverser' | 'extractor'; entryUrl?: string; outputFile?: string | null; code?: string; stepSettings?: object; position?: number }[]
+    const {
+      parser: incomingParser,
+      steps: incomingSteps,
+      newName,
+    } = req.body as {
+      parser: {
+        name: string
+        entryUrl?: string
+        entryStep?: string
+        browserType?: string
+        browserSettings?: object
+        retryConfig?: { maxRetries: number }
+        deduplication?: boolean
+        concurrentQuota?: number | null
+      }
+      steps: {
+        name: string
+        type: 'traverser' | 'extractor'
+        entryUrl?: string
+        outputFile?: string | null
+        code?: string
+        stepSettings?: object
+        position?: number
+      }[]
       newName?: string
     }
-    if (!incomingParser?.name) { res.status(400).json({ error: 'parser.name is required' }); return }
+    if (!incomingParser?.name) {
+      res.status(400).json({ error: 'parser.name is required' })
+      return
+    }
     const name = newName ?? incomingParser.name
     try {
       const created = await parserService.create({
@@ -79,19 +116,25 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
       }
       res.status(201).json({ parser: created })
     } catch (err) {
-      if (err instanceof ParserAlreadyExistsError) { res.status(409).json({ error: err.message }); return }
+      if (err instanceof ParserAlreadyExistsError) {
+        res.status(409).json({ error: err.message })
+        return
+      }
       throw err
     }
   })
 
   router.get('/', async (req, res) => {
-    const page   = Math.max(1,   parseInt(String(req.query.page   ?? '1'),  10) || 1)
-    const limit  = Math.max(1, Math.min(500, parseInt(String(req.query.limit  ?? '10'), 10) || 10))
+    const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1)
+    const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? '10'), 10) || 10))
     const search = String(req.query.search ?? '')
     const status = String(req.query.status ?? 'all')
-    const sort   = (['name', 'successRate', 'lastRunDate'] as const)
-      .includes(req.query.sort as 'name') ? req.query.sort as 'name' | 'successRate' | 'lastRunDate' : 'name'
-    const dir    = req.query.dir === 'desc' ? 'desc' : 'asc'
+    const sort = (['name', 'successRate', 'lastRunDate'] as const).includes(
+      req.query.sort as 'name',
+    )
+      ? (req.query.sort as 'name' | 'successRate' | 'lastRunDate')
+      : 'name'
+    const dir = req.query.dir === 'desc' ? 'desc' : 'asc'
 
     const raw = await runPersistence.listParsersWithLatestRun(search)
 
@@ -102,9 +145,7 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
     }))
 
     // Filter by status
-    const filtered = status === 'all'
-      ? enriched
-      : enriched.filter((p) => p.status === status)
+    const filtered = status === 'all' ? enriched : enriched.filter((p) => p.status === status)
 
     // Sort
     const sorted = [...filtered].sort((a, b) => {
@@ -128,10 +169,16 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
     })
   })
 
-  router.post('/', async (req, res) => {
+  router.post('/', requireRole('admin'), async (req, res) => {
     const {
-      name, entryUrl, entryStep, browserType,
-      browserSettings, retryConfig, deduplication, concurrentQuota,
+      name,
+      entryUrl,
+      entryStep,
+      browserType,
+      browserSettings,
+      retryConfig,
+      deduplication,
+      concurrentQuota,
     } = req.body as {
       name: string
       entryUrl?: string
@@ -142,12 +189,27 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
       deduplication?: boolean
       concurrentQuota?: number
     }
-    if (!name) { res.status(400).json({ error: 'name is required' }); return }
+    if (!name) {
+      res.status(400).json({ error: 'name is required' })
+      return
+    }
     try {
-      const parser = await parserService.create({ name, entryUrl, entryStep, browserType, browserSettings, retryConfig, deduplication, concurrentQuota })
+      const parser = await parserService.create({
+        name,
+        entryUrl,
+        entryStep,
+        browserType,
+        browserSettings,
+        retryConfig,
+        deduplication,
+        concurrentQuota,
+      })
       res.status(201).json({ parser })
     } catch (err) {
-      if (err instanceof ParserAlreadyExistsError) { res.status(409).json({ error: err.message }); return }
+      if (err instanceof ParserAlreadyExistsError) {
+        res.status(409).json({ error: err.message })
+        return
+      }
       throw err
     }
   })
@@ -160,12 +222,30 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
 
   router.put('/:id', async (req, res) => {
     const { id }: ParserRow = res.locals.parser
-    const { entryUrl, entryStep, browserType, browserSettings, retryConfig, deduplication, concurrentQuota, webhookUrl } = req.body
-    const parser = await parserService.update(id, { entryUrl, entryStep, browserType, browserSettings, retryConfig, deduplication, concurrentQuota, webhookUrl })
+    const {
+      entryUrl,
+      entryStep,
+      browserType,
+      browserSettings,
+      retryConfig,
+      deduplication,
+      concurrentQuota,
+      webhookUrl,
+    } = req.body
+    const parser = await parserService.update(id, {
+      entryUrl,
+      entryStep,
+      browserType,
+      browserSettings,
+      retryConfig,
+      deduplication,
+      concurrentQuota,
+      webhookUrl,
+    })
     res.json({ parser })
   })
 
-  router.delete('/:id', async (_req, res) => {
+  router.delete('/:id', requireRole('admin'), async (_req, res) => {
     await parserService.delete((res.locals.parser as ParserRow).id)
     res.json({ ok: true })
   })
@@ -175,23 +255,31 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
   router.get('/:id/export', async (_req, res) => {
     const { name }: ParserRow = res.locals.parser
     const result = await parserService.getParserWithSteps(name)
-    if (!result) { res.status(404).json({ error: 'Parser not found' }); return }
+    if (!result) {
+      res.status(404).json({ error: 'Parser not found' })
+      return
+    }
     const { id: _i, createdAt: _c, updatedAt: _u, ...parserData } = result.parser
-    const steps = result.steps.map(({ id: _si, parserId: _pi, createdAt: _sc, updatedAt: _su, ...rest }) => rest)
+    const steps = result.steps.map(
+      ({ id: _si, parserId: _pi, createdAt: _sc, updatedAt: _su, ...rest }) => rest,
+    )
     res.setHeader('Content-Disposition', `attachment; filename="${name}.parser.json"`)
     res.json({ parser: parserData, steps })
   })
 
   // ── Run control ──────────────────────────────────────────────────────────────
 
-  router.post('/:id/start', (_req, res) => {
+  router.post('/:id/start', requireRole('admin'), (_req, res) => {
     const { name }: ParserRow = res.locals.parser
-    if (runner.isRunning(name)) { res.status(409).json({ error: 'Already running' }); return }
+    if (runner.isRunning(name)) {
+      res.status(409).json({ error: 'Already running' })
+      return
+    }
     runner.run(name).catch((err: Error) => broadcast(name, { type: 'error', message: err.message }))
     res.json({ ok: true })
   })
 
-  router.post('/:id/stop', async (_req, res) => {
+  router.post('/:id/stop', requireRole('admin'), async (_req, res) => {
     const { name }: ParserRow = res.locals.parser
     try {
       await runner.stop(name)
@@ -211,10 +299,15 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
     }
   })
 
-  router.post('/:id/resume', (_req, res) => {
+  router.post('/:id/resume', requireRole('admin'), (_req, res) => {
     const { name }: ParserRow = res.locals.parser
-    if (runner.isRunning(name)) { res.status(409).json({ error: 'Already running' }); return }
-    runner.resume(name).catch((err: Error) => broadcast(name, { type: 'error', message: err.message }))
+    if (runner.isRunning(name)) {
+      res.status(409).json({ error: 'Already running' })
+      return
+    }
+    runner
+      .resume(name)
+      .catch((err: Error) => broadcast(name, { type: 'error', message: err.message }))
     res.json({ ok: true })
   })
 
@@ -241,14 +334,18 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
     const { id }: ParserRow = res.locals.parser
     const { cronExpression, enabled } = req.body as { cronExpression: string; enabled: boolean }
     if (typeof cronExpression !== 'string' || !cronExpression.trim()) {
-      res.status(400).json({ error: 'cronExpression is required' }); return
+      res.status(400).json({ error: 'cronExpression is required' })
+      return
     }
     const nextRunAt = SchedulerService.nextFireAt(cronExpression)
-    if (!nextRunAt) { res.status(400).json({ error: 'Invalid cron expression' }); return }
+    if (!nextRunAt) {
+      res.status(400).json({ error: 'Invalid cron expression' })
+      return
+    }
     const row = await schedulePersistence.upsertForParser({
-      parserId:       id,
+      parserId: id,
       cronExpression,
-      enabled:        Boolean(enabled),
+      enabled: Boolean(enabled),
       nextRunAt,
     })
     res.json({ schedule: row })
@@ -273,7 +370,12 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
       stoppedRunExists = info?.status === 'stopped'
     }
 
-    writeSSE(res, { type: 'init', running: isRunning, stats: runner.getStats(name) ?? null, stoppedRunExists })
+    writeSSE(res, {
+      type: 'init',
+      running: isRunning,
+      stats: runner.getStats(name) ?? null,
+      stoppedRunExists,
+    })
     getClients(name).add(res)
     req.on('close', () => getClients(name).delete(res))
   })
@@ -301,7 +403,9 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
                   files.push({ name: f, runId: sub, size: s.size, mtime: s.mtime.toISOString() })
                 }),
             )
-          } catch { /* skip unreadable subdirs */ }
+          } catch {
+            /* skip unreadable subdirs */
+          }
         }),
       )
       files.sort((a, b) => new Date(b.mtime).getTime() - new Date(a.mtime).getTime())
@@ -352,22 +456,42 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
     const { name }: ParserRow = res.locals.parser
     const { runId, file } = req.params
     const allowed = file.endsWith('.csv') || file.endsWith('.json') || file.endsWith('.xlsx')
-    if (!allowed || file.includes('/') || file.includes('..') || runId.includes('/') || runId.includes('..')) {
-      res.status(400).json({ error: 'Invalid path' }); return
+    if (
+      !allowed ||
+      file.includes('/') ||
+      file.includes('..') ||
+      runId.includes('/') ||
+      runId.includes('..')
+    ) {
+      res.status(400).json({ error: 'Invalid path' })
+      return
     }
     const safeDir = resolve(outputDir, name)
     const filePath = resolve(safeDir, runId, file)
-    if (!filePath.startsWith(safeDir + '/')) { res.status(400).json({ error: 'Invalid path' }); return }
-    if (!existsSync(filePath)) { res.status(404).json({ error: 'File not found' }); return }
+    if (!filePath.startsWith(safeDir + '/')) {
+      res.status(400).json({ error: 'Invalid path' })
+      return
+    }
+    if (!existsSync(filePath)) {
+      res.status(404).json({ error: 'File not found' })
+      return
+    }
     res.setHeader('Content-Disposition', `attachment; filename="${file}"`)
     createReadStream(filePath).pipe(res)
   })
 
   // ── Steps CRUD ───────────────────────────────────────────────────────────────
 
-  router.post('/:id/steps', async (req, res) => {
+  router.post('/:id/steps', requireRole('admin'), async (req, res) => {
     const { id: parserId }: ParserRow = res.locals.parser
-    const { name: stepName, type, entryUrl, outputFile, code, position } = req.body as {
+    const {
+      name: stepName,
+      type,
+      entryUrl,
+      outputFile,
+      code,
+      position,
+    } = req.body as {
       name: string
       type: 'traverser' | 'extractor'
       entryUrl?: string
@@ -375,13 +499,30 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
       code?: string
       position?: number
     }
-    if (!stepName) { res.status(400).json({ error: 'name is required' }); return }
-    if (type !== 'traverser' && type !== 'extractor') { res.status(400).json({ error: 'type must be traverser or extractor' }); return }
+    if (!stepName) {
+      res.status(400).json({ error: 'name is required' })
+      return
+    }
+    if (type !== 'traverser' && type !== 'extractor') {
+      res.status(400).json({ error: 'type must be traverser or extractor' })
+      return
+    }
     try {
-      const step = await parserService.createStep({ parserId, name: stepName, type, entryUrl, outputFile, code, position })
+      const step = await parserService.createStep({
+        parserId,
+        name: stepName,
+        type,
+        entryUrl,
+        outputFile,
+        code,
+        position,
+      })
       res.status(201).json({ step })
     } catch (err) {
-      if (err instanceof StepAlreadyExistsError) { res.status(409).json({ error: err.message }); return }
+      if (err instanceof StepAlreadyExistsError) {
+        res.status(409).json({ error: err.message })
+        return
+      }
       throw err
     }
   })
@@ -394,35 +535,58 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
   router.get('/:id/steps/:step', async (req, res) => {
     const { id: parserId }: ParserRow = res.locals.parser
     const step = await parserService.getStep(parserId, req.params.step)
-    if (!step) { res.status(404).json({ error: `Step "${req.params.step}" not found` }); return }
+    if (!step) {
+      res.status(404).json({ error: `Step "${req.params.step}" not found` })
+      return
+    }
     res.json({ step })
   })
 
-  router.put('/:id/steps/:step', async (req, res) => {
+  router.put('/:id/steps/:step', requireRole('admin'), async (req, res) => {
     const { id: parserId }: ParserRow = res.locals.parser
-    const step = await parserService.getStep(parserId, req.params.step)
-    if (!step) { res.status(404).json({ error: `Step "${req.params.step}" not found` }); return }
+    const step = await parserService.getStep(parserId, req.params.step as string)
+    if (!step) {
+      res.status(404).json({ error: `Step "${req.params.step}" not found` })
+      return
+    }
     const { name: newName, type, entryUrl, outputFile, code, stepSettings, position } = req.body
     try {
-      const updated = await parserService.updateStep(step.id, { name: newName, type, entryUrl, outputFile, code, stepSettings, position })
+      const updated = await parserService.updateStep(step.id, {
+        name: newName,
+        type,
+        entryUrl,
+        outputFile,
+        code,
+        stepSettings,
+        position,
+      })
       res.json({ step: updated })
     } catch (err) {
-      if (err instanceof StepAlreadyExistsError) { res.status(409).json({ error: err.message }); return }
+      if (err instanceof StepAlreadyExistsError) {
+        res.status(409).json({ error: err.message })
+        return
+      }
       throw err
     }
   })
 
-  router.delete('/:id/steps/:step', async (req, res) => {
+  router.delete('/:id/steps/:step', requireRole('admin'), async (req, res) => {
     const { id: parserId }: ParserRow = res.locals.parser
-    const deleted = await parserService.deleteStep(parserId, req.params.step)
-    if (!deleted) { res.status(404).json({ error: `Step "${req.params.step}" not found` }); return }
+    const deleted = await parserService.deleteStep(parserId, req.params.step as string)
+    if (!deleted) {
+      res.status(404).json({ error: `Step "${req.params.step}" not found` })
+      return
+    }
     res.json({ ok: true })
   })
 
   router.get('/:id/steps/:step/versions', async (req, res) => {
     const { id: parserId }: ParserRow = res.locals.parser
     const step = await parserService.getStep(parserId, req.params.step)
-    if (!step) { res.status(404).json({ error: `Step "${req.params.step}" not found` }); return }
+    if (!step) {
+      res.status(404).json({ error: `Step "${req.params.step}" not found` })
+      return
+    }
     const rows = await stepVersionService.list(step.id, 20)
     res.json({ versions: rows })
   })
@@ -430,38 +594,54 @@ export function createParsersRouter({ runner, runPersistence, parserService, dbL
   router.post('/:id/steps/:step/versions/:versionId/restore', async (req, res) => {
     const { id: parserId }: ParserRow = res.locals.parser
     const step = await parserService.getStep(parserId, req.params.step)
-    if (!step) { res.status(404).json({ error: `Step "${req.params.step}" not found` }); return }
+    if (!step) {
+      res.status(404).json({ error: `Step "${req.params.step}" not found` })
+      return
+    }
     const version = await stepVersionService.findById(req.params.versionId)
-    if (!version || version.stepId !== step.id) { res.status(404).json({ error: 'Version not found' }); return }
+    if (!version || version.stepId !== step.id) {
+      res.status(404).json({ error: 'Version not found' })
+      return
+    }
     const updated = await parserService.updateStep(step.id, { code: version.code })
     res.json({ step: updated })
   })
 
   // ── Step debug (SSE) ─────────────────────────────────────────────────────────
 
-  router.post('/:id/steps/:step/debug', async (req, res) => {
+  router.post('/:id/steps/:step/debug', requireRole('admin'), async (req, res) => {
     const { name }: ParserRow = res.locals.parser
-    const { step } = req.params
+    const step = req.params.step as string
     const { url, parent_data } = req.body as { url: string; parent_data?: Record<string, unknown> }
 
-    if (!url) { res.status(400).json({ error: 'url is required' }); return }
-    if (!/^https?:\/\//i.test(url)) { res.status(400).json({ error: 'url must start with http:// or https://' }); return }
+    if (!url) {
+      res.status(400).json({ error: 'url is required' })
+      return
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      res.status(400).json({ error: 'url must start with http:// or https://' })
+      return
+    }
 
     initSSE(res)
 
     const debugRunner = new DebugStepRunner(dbLoader)
-    debugRunner.on('log',    (log)    => writeSSE(res, { type: 'log', ...log }))
+    debugRunner.on('log', (log) => writeSSE(res, { type: 'log', ...log }))
     debugRunner.on('result', (result) => writeSSE(res, { type: 'result', result }))
 
     let cancelled = false
-    req.on('close', () => { cancelled = true; debugRunner.stop() })
+    req.on('close', () => {
+      cancelled = true
+      debugRunner.stop()
+    })
 
     try {
       await debugRunner.run(name, step, url, parent_data)
       if (!cancelled) writeSSE(res, { type: 'done' })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      if (!(err instanceof Error && err.message === 'aborted')) writeSSE(res, { type: 'error', error: message })
+      if (!(err instanceof Error && err.message === 'aborted'))
+        writeSSE(res, { type: 'error', error: message })
     } finally {
       res.end()
     }

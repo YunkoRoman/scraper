@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
 import { resolve } from 'node:path'
 import type { RunStats } from '../domain/entities/ParserRun.js'
 import { RunParser } from '../application/use-cases/RunParser.js'
@@ -73,6 +74,7 @@ const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5173')
   .split(',')
   .map((s) => s.trim())
 const app = express()
+app.use(helmet())
 app.use(
   cors({
     origin: (origin, cb) => {
@@ -108,7 +110,8 @@ app.use('/api/dashboard', createDashboardRouter({ runPersistence }))
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err)
-  res.status(500).json({ error: err.message })
+  const message = process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
+  res.status(500).json({ error: message })
 })
 
 // ── Start ─────────────────────────────────────────────────────────────────────
