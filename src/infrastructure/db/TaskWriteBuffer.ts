@@ -64,6 +64,19 @@ export class TaskWriteBuffer {
     this.flushing = this._doFlush(taskEntries, resultEntries)
     try {
       await this.flushing
+    } catch (err) {
+      for (const entry of taskEntries) {
+        if (!this.tasks.has(entry.task.id)) {
+          this.tasks.set(entry.task.id, entry)
+        }
+      }
+      for (const { taskId, rows } of resultEntries) {
+        if (!this.results.has(taskId)) {
+          this.results.set(taskId, rows)
+        }
+      }
+      console.error('[TaskWriteBuffer] flush failed, items re-queued:', err)
+      throw err
     } finally {
       this.flushing = null
     }

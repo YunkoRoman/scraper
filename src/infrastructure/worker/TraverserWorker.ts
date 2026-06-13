@@ -16,8 +16,9 @@ import { stepName } from '../../domain/value-objects/StepName.js'
 const data = workerData as WorkerData
 pipeConsole(data.stepName)
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (...args: string[]) => (...a: any[]) => Promise<any>
+const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (
+  ...args: string[]
+) => (...a: any[]) => Promise<any>
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let adapter: BrowserAdapter<any> = createBrowserAdapter()
@@ -37,7 +38,7 @@ let savedSettings: StepSettings = {}
 
 function randomDelay(min: number, max: number): Promise<void> {
   const ms = min + Math.random() * (max - min)
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function rotateAdapter(): Promise<void> {
@@ -45,17 +46,20 @@ async function rotateAdapter(): Promise<void> {
   await adapter.close().catch(console.error)
   const proxyUrl = proxyPool.next()
   const settingsForLaunch = proxyUrl
-    ? { ...savedSettings, contextOptions: { ...(savedSettings.contextOptions ?? {}), proxy: { server: proxyUrl } } }
+    ? {
+        ...savedSettings,
+        contextOptions: { ...(savedSettings.contextOptions ?? {}), proxy: { server: proxyUrl } },
+      }
     : savedSettings
   adapter = createBrowserAdapter(savedSettings.browser_type, settingsForLaunch)
   await adapter.launch()
   if (savedSettings.initScripts?.length) {
-    const pa = adapter as import('../browser/PlaywrightAdapter.js').PlaywrightAdapter
     for (const script of savedSettings.initScripts) {
-      await pa.addInitScript(script)
+      await adapter.addInitScript(script)
     }
   }
-  if (proxyUrl) console.log(`[worker] Rotated to proxy: ${proxyUrl.replace(/:\/\/[^@]*@/, '://***@')}`)
+  if (proxyUrl)
+    console.log(`[worker] Rotated to proxy: ${proxyUrl.replace(/:\/\/[^@]*@/, '://***@')}`)
   else console.log('[worker] Browser context rotated.')
 }
 
@@ -67,28 +71,25 @@ async function processPage(task: PageTask, step: Traverser<any>): Promise<boolea
 
   const page = await adapter.newPage()
 
-  // Direct tunnel to Node.js console
-  await page.exposeFunction('logToNode', (msg: string) => {
-    console.log('[browser:debug]', msg)
-  })
-
-  await page.addInitScript(() => {
-    (window as any).debugLog = (data: any) => {
-      const serialized = typeof data === 'object' ? JSON.stringify(data, (k, v) => (typeof v === 'function' ? '[Function]' : v), 2) : String(data)
-      ;(window as any).logToNode(serialized)
-    }
-  })
-
   try {
     await page.goto(task.url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     const items = await step.run(page, task)
-    parentPort!.postMessage({ type: 'LINKS_DISCOVERED', taskId: task.id, items } satisfies WorkerOutMessage)
+    parentPort!.postMessage({
+      type: 'LINKS_DISCOVERED',
+      taskId: task.id,
+      items,
+    } satisfies WorkerOutMessage)
     parentPort!.postMessage({ type: 'PAGE_SUCCESS', taskId: task.id } satisfies WorkerOutMessage)
     return true
   } catch (err) {
     console.error(`[FAIL] ${task.url}\n`, err)
     const html = await page.content().catch(() => undefined)
-    parentPort!.postMessage({ type: 'PAGE_FAILED', taskId: task.id, error: String(err), html } satisfies WorkerOutMessage)
+    parentPort!.postMessage({
+      type: 'PAGE_FAILED',
+      taskId: task.id,
+      error: String(err),
+      html,
+    } satisfies WorkerOutMessage)
     return false
   } finally {
     await page.close()
@@ -104,7 +105,11 @@ function drainQueue(step: Traverser<any>): void {
     needsRotation = false
     contextKilledCount = activeCount
     rotateAdapter()
-      .then(() => { pagesProcessed = 0; rotating = false; drainQueue(step) })
+      .then(() => {
+        pagesProcessed = 0
+        rotating = false
+        drainQueue(step)
+      })
       .catch(console.error)
     return
   }
@@ -112,14 +117,18 @@ function drainQueue(step: Traverser<any>): void {
   if (maxPagesPerContext > 0 && pagesProcessed >= maxPagesPerContext && activeCount === 0) {
     rotating = true
     rotateAdapter()
-      .then(() => { pagesProcessed = 0; rotating = false; drainQueue(step) })
+      .then(() => {
+        pagesProcessed = 0
+        rotating = false
+        drainQueue(step)
+      })
       .catch(console.error)
     return
   }
   while (queue.length > 0 && activeCount < concurrency) {
     const task = queue.shift()!
     activeCount++
-    processPage(task, step).then(success => {
+    processPage(task, step).then((success) => {
       pagesProcessed++
       if (!success) {
         if (contextKilledCount > 0) contextKilledCount--
@@ -165,14 +174,16 @@ async function main() {
   proxyPool = new ProxyPoolService((mergedSettings as { proxyPool?: string[] }).proxyPool ?? [])
   const firstProxy = proxyPool.next()
   const initialSettings = firstProxy
-    ? { ...mergedSettings, contextOptions: { ...(mergedSettings.contextOptions ?? {}), proxy: { server: firstProxy } } }
+    ? {
+        ...mergedSettings,
+        contextOptions: { ...(mergedSettings.contextOptions ?? {}), proxy: { server: firstProxy } },
+      }
     : mergedSettings
   adapter = createBrowserAdapter(mergedSettings.browser_type, initialSettings)
   await adapter.launch()
   if (mergedSettings.initScripts?.length) {
-    const pa = adapter as import('../browser/PlaywrightAdapter.js').PlaywrightAdapter
     for (const script of mergedSettings.initScripts) {
-      await pa.addInitScript(script)
+      await adapter.addInitScript(script)
     }
   }
 
@@ -182,8 +193,16 @@ async function main() {
       adapter.close().catch(console.error)
       return
     }
-    if (msg.type === 'PROCESS_PAGE' && running) {
-      enqueue(msg.task, step)
+    if (msg.type === 'PROCESS_PAGE') {
+      if (running) {
+        enqueue(msg.task, step)
+      } else {
+        parentPort!.postMessage({
+          type: 'PAGE_FAILED',
+          taskId: msg.task.id,
+          error: 'Worker is shutting down',
+        })
+      }
     }
   })
 }

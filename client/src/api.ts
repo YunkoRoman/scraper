@@ -51,7 +51,9 @@ export interface ListParsersSummaryParams {
 export const API_BASE = 'http://localhost:3001'
 
 export async function listParsers(): Promise<string[]> {
-  const data = await apiRequest<{ parsers: ParserSummary[]; total: number }>('/api/parsers?limit=500')
+  const data = await apiRequest<{ parsers: ParserSummary[]; total: number }>(
+    '/api/parsers?limit=500',
+  )
   return data.parsers.map((p) => p.name)
 }
 
@@ -59,12 +61,12 @@ export async function listParsersSummary(
   params: ListParsersSummaryParams = {},
 ): Promise<{ parsers: ParserSummary[]; total: number }> {
   const q = new URLSearchParams()
-  if (params.page)   q.set('page',   String(params.page))
-  if (params.limit)  q.set('limit',  String(params.limit))
+  if (params.page) q.set('page', String(params.page))
+  if (params.limit) q.set('limit', String(params.limit))
   if (params.search) q.set('search', params.search)
   if (params.status) q.set('status', params.status)
-  if (params.sort)   q.set('sort',   params.sort)
-  if (params.dir)    q.set('dir',    params.dir)
+  if (params.sort) q.set('sort', params.sort)
+  if (params.dir) q.set('dir', params.dir)
   return apiRequest(`/api/parsers?${q}`)
 }
 
@@ -86,7 +88,10 @@ export async function listFiles(id: string): Promise<OutputFile[]> {
 }
 
 export function downloadFile(parserId: string, runId: string, fileName: string): void {
-  window.open(`${API_BASE}/api/parsers/${parserId}/files/${encodeURIComponent(runId)}/${encodeURIComponent(fileName)}`, '_blank')
+  window.open(
+    `${API_BASE}/api/parsers/${parserId}/files/${encodeURIComponent(runId)}/${encodeURIComponent(fileName)}`,
+    '_blank',
+  )
 }
 
 export interface StepInfo {
@@ -101,7 +106,7 @@ export interface TraverserResult {
 }
 
 export async function listSteps(parserId: string): Promise<StepInfo[]> {
-  const res = await fetch(`${API_BASE}/api/parsers/${parserId}/steps`)
+  const res = await fetch(`${API_BASE}/api/parsers/${parserId}/steps`, { credentials: 'include' })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { error?: string }).error ?? 'Failed to load steps')
@@ -137,6 +142,7 @@ export async function fetchFileContent(
 ): Promise<string> {
   const res = await fetch(
     `${API_BASE}/api/parsers/${parserId}/files/${encodeURIComponent(runId)}/${encodeURIComponent(fileName)}`,
+    { credentials: 'include' },
   )
   if (!res.ok) throw new Error(`Failed to fetch file: ${res.status}`)
   return res.text()
@@ -161,6 +167,7 @@ export async function fetchCsvRows(
   const q = new URLSearchParams({ page: String(page), limit: String(limit) })
   const res = await fetch(
     `${API_BASE}/api/parsers/${parserId}/files/${encodeURIComponent(runId)}/${encodeURIComponent(fileName)}/rows?${q}`,
+    { credentials: 'include' },
   )
   if (!res.ok) throw new Error(`Failed to fetch CSV rows: ${res.status}`)
   return res.json() as Promise<CsvRowsResponse>
@@ -235,7 +242,7 @@ export interface UpdateStepInput {
 }
 
 async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${url}`, options)
+  const res = await fetch(`${API_BASE}${url}`, { credentials: 'include', ...options })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`)
@@ -279,21 +286,32 @@ export async function createStep(parserId: string, input: CreateStepInput): Prom
 }
 
 export async function getStep(parserId: string, stepName: string): Promise<StepRow> {
-  const data = await apiRequest<{ step: StepRow }>(`/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}`)
+  const data = await apiRequest<{ step: StepRow }>(
+    `/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}`,
+  )
   return data.step
 }
 
-export async function updateStep(parserId: string, stepName: string, input: UpdateStepInput): Promise<StepRow> {
-  const data = await apiRequest<{ step: StepRow }>(`/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  })
+export async function updateStep(
+  parserId: string,
+  stepName: string,
+  input: UpdateStepInput,
+): Promise<StepRow> {
+  const data = await apiRequest<{ step: StepRow }>(
+    `/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  )
   return data.step
 }
 
 export async function deleteStep(parserId: string, stepName: string): Promise<void> {
-  await apiRequest(`/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}`, { method: 'DELETE' })
+  await apiRequest(`/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}`, {
+    method: 'DELETE',
+  })
 }
 
 export interface RunInfo {
@@ -332,7 +350,7 @@ export async function listJobs(
   parserName?: string,
 ): Promise<{ runs: (RunInfo & { elapsed?: number })[]; total: number }> {
   const q = new URLSearchParams({ page: String(page), limit: String(limit) })
-  if (status)     q.set('status',     status)
+  if (status) q.set('status', status)
   if (parserName) q.set('parserName', parserName)
   return apiRequest(`/api/jobs?${q}`)
 }
@@ -353,13 +371,18 @@ export async function getJobTasks(
   stepName?: string,
 ): Promise<{ tasks: TaskRow[]; total: number }> {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) })
-  if (status)   params.set('status',   status)
+  if (status) params.set('status', status)
   if (stepName) params.set('stepName', stepName)
   return apiRequest(`/api/jobs/${encodeURIComponent(runId)}/tasks?${params}`)
 }
 
-export async function getTaskResult(runId: string, taskId: string): Promise<{ rows: Record<string, unknown>[]; html: string | null }> {
-  return apiRequest(`/api/jobs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/result`)
+export async function getTaskResult(
+  runId: string,
+  taskId: string,
+): Promise<{ rows: Record<string, unknown>[]; html: string | null }> {
+  return apiRequest(
+    `/api/jobs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/result`,
+  )
 }
 
 export async function stopJob(runId: string): Promise<void> {
@@ -375,7 +398,10 @@ export async function getTask(runId: string, taskId: string): Promise<TaskRow> {
 }
 
 export async function retryTask(runId: string, taskId: string): Promise<void> {
-  await apiRequest(`/api/jobs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/retry`, { method: 'POST' })
+  await apiRequest(
+    `/api/jobs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/retry`,
+    { method: 'POST' },
+  )
 }
 
 export async function retryAllFailed(runId: string): Promise<void> {
@@ -383,7 +409,10 @@ export async function retryAllFailed(runId: string): Promise<void> {
 }
 
 export async function abortTask(runId: string, taskId: string): Promise<void> {
-  await apiRequest(`/api/jobs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/abort`, { method: 'POST' })
+  await apiRequest(
+    `/api/jobs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/abort`,
+    { method: 'POST' },
+  )
 }
 
 export async function resumeParser(id: string): Promise<void> {
@@ -394,11 +423,17 @@ export async function rerunParser(id: string): Promise<void> {
   await apiRequest(`/api/parsers/${id}/rerun`, { method: 'POST' })
 }
 
-export async function exportParser(id: string): Promise<{ parser: Record<string, unknown>; steps: Record<string, unknown>[] }> {
+export async function exportParser(
+  id: string,
+): Promise<{ parser: Record<string, unknown>; steps: Record<string, unknown>[] }> {
   return apiRequest(`/api/parsers/${id}/export`)
 }
 
-export async function importParser(data: { parser: Record<string, unknown>; steps: Record<string, unknown>[]; newName?: string }): Promise<{ id: string; name: string }> {
+export async function importParser(data: {
+  parser: Record<string, unknown>
+  steps: Record<string, unknown>[]
+  newName?: string
+}): Promise<{ id: string; name: string }> {
   const out = await apiRequest<{ parser: { id: string; name: string } }>('/api/parsers/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -421,7 +456,11 @@ export async function getSchedule(parserId: string): Promise<Schedule | null> {
   return r.schedule
 }
 
-export async function setSchedule(parserId: string, cronExpression: string, enabled: boolean): Promise<Schedule> {
+export async function setSchedule(
+  parserId: string,
+  cronExpression: string,
+  enabled: boolean,
+): Promise<Schedule> {
   const r = await apiRequest<{ schedule: Schedule }>(`/api/parsers/${parserId}/schedule`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -442,11 +481,68 @@ export interface StepVersion {
 }
 
 export async function listStepVersions(parserId: string, stepName: string): Promise<StepVersion[]> {
-  const r = await apiRequest<{ versions: StepVersion[] }>(`/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}/versions`)
+  const r = await apiRequest<{ versions: StepVersion[] }>(
+    `/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}/versions`,
+  )
   return r.versions
 }
 
-export async function restoreStepVersion(parserId: string, stepName: string, versionId: string): Promise<StepRow> {
-  const r = await apiRequest<{ step: StepRow }>(`/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}/versions/${versionId}/restore`, { method: 'POST' })
+export async function restoreStepVersion(
+  parserId: string,
+  stepName: string,
+  versionId: string,
+): Promise<StepRow> {
+  const r = await apiRequest<{ step: StepRow }>(
+    `/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}/versions/${versionId}/restore`,
+    { method: 'POST' },
+  )
   return r.step
+}
+
+export interface AuthUser {
+  id: string
+  organizationId: string
+  fullName: string
+  email: string
+  role: 'admin' | 'coworker'
+  status: 'active' | 'pending' | 'deactivated'
+}
+
+export interface RegisterPayload {
+  organizationName: string
+  industry: string
+  fullName: string
+  email: string
+  password: string
+}
+
+export async function apiRegister(payload: RegisterPayload): Promise<AuthUser> {
+  const data = await apiRequest<{ user: AuthUser }>('/api/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  return data.user
+}
+
+export async function apiLogin(email: string, password: string): Promise<AuthUser> {
+  const data = await apiRequest<{ user: AuthUser }>('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+  return data.user
+}
+
+export async function apiLogout(): Promise<void> {
+  await apiRequest('/api/auth/logout', { method: 'POST' })
+}
+
+/** Returns the current user, or null if not authenticated (401). */
+export async function apiMe(): Promise<AuthUser | null> {
+  const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: 'include' })
+  if (res.status === 401) return null
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const data = (await res.json()) as { user: AuthUser }
+  return data.user
 }

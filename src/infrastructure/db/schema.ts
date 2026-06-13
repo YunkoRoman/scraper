@@ -4,6 +4,7 @@ import { relations } from 'drizzle-orm'
 
 export const parsers = pgTable('parsers', {
   id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().default('00000000-0000-0000-0000-000000000000'),
   name: text('name').notNull().unique(),
   entryUrl: text('entry_url').notNull().default(''),
   entryStep: text('entry_step').notNull().default(''),
@@ -19,7 +20,9 @@ export const parsers = pgTable('parsers', {
 
 export const steps = pgTable('steps', {
   id: uuid('id').primaryKey().defaultRandom(),
-  parserId: uuid('parser_id').notNull().references(() => parsers.id, { onDelete: 'cascade' }),
+  parserId: uuid('parser_id')
+    .notNull()
+    .references(() => parsers.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   type: text('type').notNull(), // 'traverser' | 'extractor'
   entryUrl: text('entry_url').notNull().default(''),
@@ -31,8 +34,12 @@ export const steps = pgTable('steps', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
-export const parsersRelations = relations(parsers, ({ many }) => ({
+export const parsersRelations = relations(parsers, ({ many, one }) => ({
   steps: many(steps),
+  organization: one(organizations, {
+    fields: [parsers.organizationId],
+    references: [organizations.id],
+  }),
 }))
 
 export const stepsRelations = relations(steps, ({ one }) => ({
@@ -40,47 +47,90 @@ export const stepsRelations = relations(steps, ({ one }) => ({
 }))
 
 export const parserRuns = pgTable('parser_runs', {
-  id:         uuid('id').primaryKey(),
+  id: uuid('id').primaryKey(),
   parserName: text('parser_name').notNull(),
-  status:     text('status').notNull().default('running'),
-  startedAt:  timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
-  stoppedAt:  timestamp('stopped_at', { withTimezone: true }),
+  status: text('status').notNull().default('running'),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  stoppedAt: timestamp('stopped_at', { withTimezone: true }),
 })
 
 export const runTasks = pgTable('run_tasks', {
-  id:           uuid('id').primaryKey(),
-  runId:        uuid('run_id').notNull().references(() => parserRuns.id, { onDelete: 'cascade' }),
-  url:          text('url').notNull(),
-  stepName:     text('step_name').notNull(),
-  stepType:     text('step_type').notNull(),
-  state:        text('state').notNull(),
-  attempts:     integer('attempts').notNull().default(0),
-  maxAttempts:  integer('max_attempts').notNull(),
-  error:        text('error'),
+  id: uuid('id').primaryKey(),
+  runId: uuid('run_id')
+    .notNull()
+    .references(() => parserRuns.id, { onDelete: 'cascade' }),
+  url: text('url').notNull(),
+  stepName: text('step_name').notNull(),
+  stepType: text('step_type').notNull(),
+  state: text('state').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull(),
+  error: text('error'),
   parentTaskId: uuid('parent_task_id'),
-  parent_data:  jsonb('parent_data'),
-  updatedAt:    timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  parent_data: jsonb('parent_data'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 export const taskResults = pgTable('task_results', {
-  taskId: uuid('task_id').primaryKey().references(() => runTasks.id, { onDelete: 'cascade' }),
-  rows:   jsonb('rows').notNull().default([]),
-  html:   text('html'),
+  taskId: uuid('task_id')
+    .primaryKey()
+    .references(() => runTasks.id, { onDelete: 'cascade' }),
+  rows: jsonb('rows').notNull().default([]),
+  html: text('html'),
 })
 
 export const scheduledRuns = pgTable('scheduled_runs', {
-  id:             uuid('id').primaryKey().defaultRandom(),
-  parserId:       uuid('parser_id').notNull().references(() => parsers.id, { onDelete: 'cascade' }).unique(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  parserId: uuid('parser_id')
+    .notNull()
+    .references(() => parsers.id, { onDelete: 'cascade' })
+    .unique(),
   cronExpression: text('cron_expression').notNull(),
-  enabled:        boolean('enabled').notNull().default(true),
-  lastRunAt:      timestamp('last_run_at', { withTimezone: true }),
-  nextRunAt:      timestamp('next_run_at', { withTimezone: true }),
-  createdAt:      timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  enabled: boolean('enabled').notNull().default(true),
+  lastRunAt: timestamp('last_run_at', { withTimezone: true }),
+  nextRunAt: timestamp('next_run_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 export const stepVersions = pgTable('step_versions', {
-  id:      uuid('id').primaryKey().defaultRandom(),
-  stepId:  uuid('step_id').notNull().references(() => steps.id, { onDelete: 'cascade' }),
-  code:    text('code').notNull(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  stepId: uuid('step_id')
+    .notNull()
+    .references(() => steps.id, { onDelete: 'cascade' }),
+  code: text('code').notNull(),
   savedAt: timestamp('saved_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+export const organizations = pgTable('organizations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull().unique(),
+  industry: text('industry').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  fullName: text('full_name').notNull(),
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  role: text('role').notNull(),
+  status: text('status').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const organizationsRelations = relations(organizations, ({ many }) => ({
+  users: many(users),
+  parsers: many(parsers),
+}))
+
+export const usersRelations = relations(users, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [users.organizationId],
+    references: [organizations.id],
+  }),
+}))

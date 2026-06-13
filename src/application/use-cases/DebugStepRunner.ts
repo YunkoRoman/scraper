@@ -39,44 +39,61 @@ export class DebugStepRunner extends EventEmitter {
       throw new Error(`Step "${stepName}" has no filePath or code — cannot spawn worker`)
     }
 
-    const task = createPageTask(url, stepName as StepName, step.type, config.retryConfig, undefined, parent_data)
+    const task = createPageTask(
+      url,
+      stepName as StepName,
+      step.type,
+      config.retryConfig,
+      undefined,
+      parent_data,
+    )
 
     const bootstrapFile = resolve(__dirname, '../../infrastructure/worker/worker-bootstrap.js')
-    const tsFile = step.type === 'traverser'
-      ? resolve(__dirname, '../../infrastructure/worker/TraverserWorker.ts')
-      : resolve(__dirname, '../../infrastructure/worker/ExtractorWorker.ts')
-    const jsFile = step.type === 'traverser'
-      ? resolve(__dirname, '../../infrastructure/worker/TraverserWorker.js')
-      : resolve(__dirname, '../../infrastructure/worker/ExtractorWorker.js')
+    const tsFile =
+      step.type === 'traverser'
+        ? resolve(__dirname, '../../infrastructure/worker/TraverserWorker.ts')
+        : resolve(__dirname, '../../infrastructure/worker/ExtractorWorker.ts')
+    const jsFile =
+      step.type === 'traverser'
+        ? resolve(__dirname, '../../infrastructure/worker/TraverserWorker.js')
+        : resolve(__dirname, '../../infrastructure/worker/ExtractorWorker.js')
 
     const entryFile = isTsx ? bootstrapFile : jsFile
 
     const workerData = config.filePath
-      ? (isTsx
-          ? { parserFilePath: config.filePath, stepName, __workerPath: tsFile, browserSettings: config.browserSettings }
-          : { parserFilePath: config.filePath, stepName, browserSettings: config.browserSettings })
-      : (isTsx
-          ? {
-              stepCode: step.code!,
-              stepType: step.type,
-              outputFile: step.type === 'extractor' ? (step as import('../../domain/entities/Extractor.js').Extractor).outputFile : undefined,
-              stepSettings: step.settings,
-              stepName,
-              __workerPath: tsFile,
-              browserSettings: config.browserSettings,
-            }
-          : {
-              stepCode: step.code!,
-              stepType: step.type,
-              outputFile: step.type === 'extractor' ? (step as import('../../domain/entities/Extractor.js').Extractor).outputFile : undefined,
-              stepSettings: step.settings,
-              stepName,
-              browserSettings: config.browserSettings,
-            })
+      ? isTsx
+        ? {
+            parserFilePath: config.filePath,
+            stepName,
+            __workerPath: tsFile,
+            browserSettings: config.browserSettings,
+          }
+        : { parserFilePath: config.filePath, stepName, browserSettings: config.browserSettings }
+      : isTsx
+        ? {
+            stepCode: step.code!,
+            stepType: step.type,
+            outputFile: step.outputFile,
+            stepSettings: step.settings,
+            stepName,
+            __workerPath: tsFile,
+            browserSettings: config.browserSettings,
+          }
+        : {
+            stepCode: step.code!,
+            stepType: step.type,
+            outputFile: step.outputFile,
+            stepSettings: step.settings,
+            stepName,
+            browserSettings: config.browserSettings,
+          }
 
     return new Promise((resolve, reject) => {
       this.pendingReject = reject
-      const worker = new Worker(entryFile, { workerData })
+      const worker = new Worker(entryFile, {
+        workerData,
+        resourceLimits: { maxOldGenerationSizeMb: 512, maxYoungGenerationSizeMb: 128 },
+      })
       this.worker = worker
 
       worker.on('message', (msg: WorkerOutMessage) => {
@@ -88,7 +105,11 @@ export class DebugStepRunner extends EventEmitter {
             this.emit('result', { type: 'links', items: msg.items } satisfies DebugResult)
             break
           case 'DATA_EXTRACTED':
-            this.emit('result', { type: 'data', rows: msg.rows, outputFile: msg.outputFile } satisfies DebugResult)
+            this.emit('result', {
+              type: 'data',
+              rows: msg.rows,
+              outputFile: msg.outputFile,
+            } satisfies DebugResult)
             break
           case 'PAGE_SUCCESS':
             this._cleanup()
@@ -98,6 +119,14 @@ export class DebugStepRunner extends EventEmitter {
             this._cleanup()
             reject(msg.error)
             break
+          default: {
+            const _exhaustive: never = msg
+            this._cleanup()
+            reject(
+              new Error(`Unhandled worker message type: ${(_exhaustive as WorkerOutMessage).type}`),
+            )
+            break
+          }
         }
       })
 

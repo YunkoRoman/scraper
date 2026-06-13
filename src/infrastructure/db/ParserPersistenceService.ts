@@ -4,13 +4,14 @@ import { BasePersistenceService } from './BasePersistenceService.js'
 import type { StepVersionPersistenceService } from './StepVersionPersistenceService.js'
 
 export type ParserRow = typeof parsersTable.$inferSelect
-export type StepRow   = typeof stepsTable.$inferSelect
+export type StepRow = typeof stepsTable.$inferSelect
 export type StepSummary = Pick<StepRow, 'name' | 'type' | 'position'>
 
 export class ParserAlreadyExistsError extends Error {}
-export class StepAlreadyExistsError   extends Error {}
+export class StepAlreadyExistsError extends Error {}
 
 export interface CreateParserInput {
+  organizationId: string
   name: string
   entryUrl?: string
   entryStep?: string
@@ -53,29 +54,40 @@ export interface UpdateStepInput {
   position?: number
 }
 
-export class ParserPersistenceService extends BasePersistenceService<ParserRow, CreateParserInput, UpdateParserInput> {
+export class ParserPersistenceService extends BasePersistenceService<
+  ParserRow,
+  CreateParserInput,
+  UpdateParserInput
+> {
   private versions: StepVersionPersistenceService | null = null
 
-  setVersionService(svc: StepVersionPersistenceService): void { this.versions = svc }
+  setVersionService(svc: StepVersionPersistenceService): void {
+    this.versions = svc
+  }
 
   // ── Abstract implementations ─────────────────────────────────────────────
 
   async create(input: CreateParserInput): Promise<ParserRow> {
     try {
-      const [row] = await this.db.insert(parsersTable).values({
-        name:            input.name,
-        entryUrl:        input.entryUrl        ?? '',
-        entryStep:       input.entryStep       ?? '',
-        browserType:     input.browserType     ?? 'playwright',
-        browserSettings: input.browserSettings ?? {},
-        retryConfig:     input.retryConfig     ?? { maxRetries: 5 },
-        deduplication:   input.deduplication   ?? true,
-        concurrentQuota: input.concurrentQuota ?? null,
-        webhookUrl:      input.webhookUrl      ?? null,
-      }).returning()
+      const [row] = await this.db
+        .insert(parsersTable)
+        .values({
+          organizationId: input.organizationId,
+          name: input.name,
+          entryUrl: input.entryUrl ?? '',
+          entryStep: input.entryStep ?? '',
+          browserType: input.browserType ?? 'playwright',
+          browserSettings: input.browserSettings ?? {},
+          retryConfig: input.retryConfig ?? { maxRetries: 5 },
+          deduplication: input.deduplication ?? true,
+          concurrentQuota: input.concurrentQuota ?? null,
+          webhookUrl: input.webhookUrl ?? null,
+        })
+        .returning()
       return row
     } catch (err) {
-      if (this.isDuplicateKeyError(err)) throw new ParserAlreadyExistsError(`Parser "${input.name}" already exists`)
+      if (this.isDuplicateKeyError(err))
+        throw new ParserAlreadyExistsError(`Parser "${input.name}" already exists`)
       throw err
     }
   }
@@ -86,17 +98,21 @@ export class ParserPersistenceService extends BasePersistenceService<ParserRow, 
   }
 
   async update(id: string, input: UpdateParserInput): Promise<ParserRow> {
-    const [updated] = await this.db.update(parsersTable).set({
-      ...(input.entryUrl        !== undefined && { entryUrl:        input.entryUrl }),
-      ...(input.entryStep       !== undefined && { entryStep:       input.entryStep }),
-      ...(input.browserType     !== undefined && { browserType:     input.browserType }),
-      ...(input.browserSettings !== undefined && { browserSettings: input.browserSettings }),
-      ...(input.retryConfig     !== undefined && { retryConfig:     input.retryConfig }),
-      ...(input.deduplication   !== undefined && { deduplication:   input.deduplication }),
-      ...(input.concurrentQuota !== undefined && { concurrentQuota: input.concurrentQuota }),
-      ...(input.webhookUrl      !== undefined && { webhookUrl:      input.webhookUrl }),
-      updatedAt: new Date(),
-    }).where(eq(parsersTable.id, id)).returning()
+    const [updated] = await this.db
+      .update(parsersTable)
+      .set({
+        ...(input.entryUrl !== undefined && { entryUrl: input.entryUrl }),
+        ...(input.entryStep !== undefined && { entryStep: input.entryStep }),
+        ...(input.browserType !== undefined && { browserType: input.browserType }),
+        ...(input.browserSettings !== undefined && { browserSettings: input.browserSettings }),
+        ...(input.retryConfig !== undefined && { retryConfig: input.retryConfig }),
+        ...(input.deduplication !== undefined && { deduplication: input.deduplication }),
+        ...(input.concurrentQuota !== undefined && { concurrentQuota: input.concurrentQuota }),
+        ...(input.webhookUrl !== undefined && { webhookUrl: input.webhookUrl }),
+        updatedAt: new Date(),
+      })
+      .where(eq(parsersTable.id, id))
+      .returning()
     return updated
   }
 
@@ -116,11 +132,24 @@ export class ParserPersistenceService extends BasePersistenceService<ParserRow, 
     return row ?? null
   }
 
+  async getParserByNameAndOrg(name: string, orgId: string): Promise<ParserRow | null> {
+    const [row] = await this.db
+      .select()
+      .from(parsersTable)
+      .where(and(eq(parsersTable.name, name), eq(parsersTable.organizationId, orgId)))
+    return row ?? null
+  }
+
+  async listParsersByOrg(orgId: string): Promise<ParserRow[]> {
+    return this.db.select().from(parsersTable).where(eq(parsersTable.organizationId, orgId))
+  }
 
   async getParserWithSteps(name: string): Promise<{ parser: ParserRow; steps: StepRow[] } | null> {
     const parser = await this.getParserByName(name)
     if (!parser) return null
-    const steps = await this.db.select().from(stepsTable)
+    const steps = await this.db
+      .select()
+      .from(stepsTable)
       .where(eq(stepsTable.parserId, parser.id))
       .orderBy(stepsTable.position)
     return { parser, steps }
@@ -129,33 +158,43 @@ export class ParserPersistenceService extends BasePersistenceService<ParserRow, 
   // ── Steps CRUD ────────────────────────────────────────────────────────────
 
   async listSteps(parserId: string): Promise<StepSummary[]> {
-    return this.db.select({
-      name:     stepsTable.name,
-      type:     stepsTable.type,
-      position: stepsTable.position,
-    }).from(stepsTable).where(eq(stepsTable.parserId, parserId)).orderBy(stepsTable.position)
+    return this.db
+      .select({
+        name: stepsTable.name,
+        type: stepsTable.type,
+        position: stepsTable.position,
+      })
+      .from(stepsTable)
+      .where(eq(stepsTable.parserId, parserId))
+      .orderBy(stepsTable.position)
   }
 
   async getStep(parserId: string, stepName: string): Promise<StepRow | null> {
-    const [row] = await this.db.select().from(stepsTable)
+    const [row] = await this.db
+      .select()
+      .from(stepsTable)
       .where(and(eq(stepsTable.parserId, parserId), eq(stepsTable.name, stepName)))
     return row ?? null
   }
 
   async createStep(input: CreateStepInput): Promise<StepRow> {
     try {
-      const [row] = await this.db.insert(stepsTable).values({
-        parserId:   input.parserId,
-        name:       input.name,
-        type:       input.type,
-        entryUrl:   input.entryUrl   ?? '',
-        outputFile: input.outputFile ?? (input.type === 'extractor' ? `${input.name}.csv` : null),
-        code:       input.code       ?? '',
-        position:   input.position   ?? 0,
-      }).returning()
+      const [row] = await this.db
+        .insert(stepsTable)
+        .values({
+          parserId: input.parserId,
+          name: input.name,
+          type: input.type,
+          entryUrl: input.entryUrl ?? '',
+          outputFile: input.outputFile ?? (input.type === 'extractor' ? `${input.name}.csv` : null),
+          code: input.code ?? '',
+          position: input.position ?? 0,
+        })
+        .returning()
       return row
     } catch (err) {
-      if (this.isDuplicateKeyError(err)) throw new StepAlreadyExistsError(`Step "${input.name}" already exists`)
+      if (this.isDuplicateKeyError(err))
+        throw new StepAlreadyExistsError(`Step "${input.name}" already exists`)
       throw err
     }
   }
@@ -165,28 +204,36 @@ export class ParserPersistenceService extends BasePersistenceService<ParserRow, 
       if (input.code !== undefined && this.versions) {
         const [existing] = await this.db.select().from(stepsTable).where(eq(stepsTable.id, stepId))
         if (existing && existing.code !== input.code && existing.code.trim().length > 0) {
-          await this.versions.save(stepId, existing.code).catch((e) => console.error('[step-version] save failed:', e))
+          await this.versions
+            .save(stepId, existing.code)
+            .catch((e) => console.error('[step-version] save failed:', e))
         }
       }
-      const [updated] = await this.db.update(stepsTable).set({
-        ...(input.name         !== undefined && { name:         input.name }),
-        ...(input.type         !== undefined && { type:         input.type }),
-        ...(input.entryUrl     !== undefined && { entryUrl:     input.entryUrl }),
-        ...(input.outputFile   !== undefined && { outputFile:   input.outputFile }),
-        ...(input.code         !== undefined && { code:         input.code }),
-        ...(input.stepSettings !== undefined && { stepSettings: input.stepSettings }),
-        ...(input.position     !== undefined && { position:     input.position }),
-        updatedAt: new Date(),
-      }).where(eq(stepsTable.id, stepId)).returning()
+      const [updated] = await this.db
+        .update(stepsTable)
+        .set({
+          ...(input.name !== undefined && { name: input.name }),
+          ...(input.type !== undefined && { type: input.type }),
+          ...(input.entryUrl !== undefined && { entryUrl: input.entryUrl }),
+          ...(input.outputFile !== undefined && { outputFile: input.outputFile }),
+          ...(input.code !== undefined && { code: input.code }),
+          ...(input.stepSettings !== undefined && { stepSettings: input.stepSettings }),
+          ...(input.position !== undefined && { position: input.position }),
+          updatedAt: new Date(),
+        })
+        .where(eq(stepsTable.id, stepId))
+        .returning()
       return updated
     } catch (err) {
-      if (this.isDuplicateKeyError(err)) throw new StepAlreadyExistsError('Step name already exists')
+      if (this.isDuplicateKeyError(err))
+        throw new StepAlreadyExistsError('Step name already exists')
       throw err
     }
   }
 
   async deleteStep(parserId: string, stepName: string): Promise<boolean> {
-    const deleted = await this.db.delete(stepsTable)
+    const deleted = await this.db
+      .delete(stepsTable)
       .where(and(eq(stepsTable.parserId, parserId), eq(stepsTable.name, stepName)))
       .returning({ id: stepsTable.id })
     return deleted.length > 0

@@ -14,7 +14,13 @@ const CACHE_MAX = 5_000
 
 function emptyStats(): RunStats {
   return {
-    total: 0, pending: 0, retry: 0, success: 0, failed: 0, aborted: 0, inProgress: 0,
+    total: 0,
+    pending: 0,
+    retry: 0,
+    success: 0,
+    failed: 0,
+    aborted: 0,
+    inProgress: 0,
     traversers: { total: 0, success: 0, failed: 0 },
     extractors: { total: 0, success: 0, failed: 0 },
   }
@@ -26,6 +32,7 @@ function statsTypeKey(stepType: StepType): 'traversers' | 'extractors' {
 
 export class DbTaskStateStore implements TaskStateStore {
   private cache = new Map<string, PageTask>()
+  private locks = new Map<string, Promise<unknown>>()
   private _stats: RunStats = emptyStats()
 
   constructor(
@@ -61,21 +68,49 @@ export class DbTaskStateStore implements TaskStateStore {
     const s = this._stats
     if (prev) {
       switch (prev.state) {
-        case PageState.Pending:    s.pending--;    break
-        case PageState.Retry:      s.retry--;      break
-        case PageState.InProgress: s.inProgress--; break
-        case PageState.Success:    s.success--;    s[statsTypeKey(prev.stepType)].success--; break
-        case PageState.Failed:     s.failed--;     s[statsTypeKey(prev.stepType)].failed--;  break
-        case PageState.Aborted:    s.aborted--;    break
+        case PageState.Pending:
+          s.pending--
+          break
+        case PageState.Retry:
+          s.retry--
+          break
+        case PageState.InProgress:
+          s.inProgress--
+          break
+        case PageState.Success:
+          s.success--
+          s[statsTypeKey(prev.stepType)].success--
+          break
+        case PageState.Failed:
+          s.failed--
+          s[statsTypeKey(prev.stepType)].failed--
+          break
+        case PageState.Aborted:
+          s.aborted--
+          break
       }
     }
     switch (next.state) {
-      case PageState.Pending:    s.pending++;    break
-      case PageState.Retry:      s.retry++;      break
-      case PageState.InProgress: s.inProgress++; break
-      case PageState.Success:    s.success++;    s[statsTypeKey(next.stepType)].success++; break
-      case PageState.Failed:     s.failed++;     s[statsTypeKey(next.stepType)].failed++;  break
-      case PageState.Aborted:    s.aborted++;    break
+      case PageState.Pending:
+        s.pending++
+        break
+      case PageState.Retry:
+        s.retry++
+        break
+      case PageState.InProgress:
+        s.inProgress++
+        break
+      case PageState.Success:
+        s.success++
+        s[statsTypeKey(next.stepType)].success++
+        break
+      case PageState.Failed:
+        s.failed++
+        s[statsTypeKey(next.stepType)].failed++
+        break
+      case PageState.Aborted:
+        s.aborted++
+        break
     }
   }
 
@@ -109,13 +144,26 @@ export class DbTaskStateStore implements TaskStateStore {
   }
 
   private async mutate(id: string, fn: (t: PageTask) => PageTask): Promise<PageTask> {
-    const current = await this.getTask(id)
-    if (!current) throw new Error(`Task ${id} not found`)
-    const next = fn(current)
-    this.applyStatsDelta(current, next)
-    this.touch(next)
-    await this.persistence.upsertTask(this.runId, next)
-    return next
+    const prev = this.locks.get(id) ?? Promise.resolve()
+    let unlock!: () => void
+    const lock = new Promise<void>((r) => {
+      unlock = r
+    })
+    this.locks.set(id, lock)
+
+    await prev
+    try {
+      const current = await this.getTask(id)
+      if (!current) throw new Error(`Task ${id} not found`)
+      const next = fn(current)
+      this.applyStatsDelta(current, next)
+      this.touch(next)
+      await this.persistence.upsertTask(this.runId, next)
+      return next
+    } finally {
+      unlock()
+      if (this.locks.get(id) === lock) this.locks.delete(id)
+    }
   }
 
   async markInProgress(id: string): Promise<PageTask> {
