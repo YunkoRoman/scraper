@@ -16,6 +16,7 @@ async function migrate() {
     '0005_webhook_url.sql',
     '0006_step_versions.sql',
     '0007_auth.sql',
+    '0008_org_isolation.sql',
   ]
   for (const file of migrations) {
     const sql = await readFile(resolve(__dirname, 'migrations', file), 'utf8')
