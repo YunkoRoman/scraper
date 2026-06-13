@@ -1,3 +1,11 @@
+/**
+ * Generates a JS snippet defining solveCF(url) for injection into step execution context.
+ * Prepend to user step code before AsyncFunction construction.
+ *
+ * NOTE: `url` passed to solveCF() is user-controlled and causes FlareSolverr to make an
+ * outbound HTTP request to that URL. Do not run FlareSolverr on hosts with privileged
+ * access to internal services (same SSRF risk as page.goto()).
+ */
 export function makeSolveCFSnippet(flareSolverrUrl: string): string {
   return `
 async function solveCF(url) {
