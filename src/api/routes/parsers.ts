@@ -18,6 +18,7 @@ import { SchedulerService } from '../../application/services/SchedulerService.js
 import type { StepVersionPersistenceService } from '../../infrastructure/db/StepVersionPersistenceService.js'
 import { CsvRowReader } from '../../infrastructure/csv/CsvRowReader.js'
 import { requireRole } from '../middleware/requireRole.js'
+import { validatePublicUrl } from '../utils/validateUrl.js'
 
 interface Deps {
   runner: ParserRunnerService
@@ -88,6 +89,12 @@ export function createParsersRouter({
       return
     }
     const name = newName ?? incomingParser.name
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(name)) {
+      res.status(400).json({
+        error: 'name must contain only letters, digits, hyphens, and underscores (max 100 chars)',
+      })
+      return
+    }
     try {
       const created = await parserService.create({
         name,
@@ -125,9 +132,9 @@ export function createParsersRouter({
   })
 
   router.get('/', async (req, res) => {
-    const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1)
+    const page = Math.min(10000, Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1))
     const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? '10'), 10) || 10))
-    const search = String(req.query.search ?? '')
+    const search = String(req.query.search ?? '').slice(0, 200)
     const status = String(req.query.status ?? 'all')
     const sort = (['name', 'successRate', 'lastRunDate'] as const).includes(
       req.query.sort as 'name',
@@ -192,6 +199,19 @@ export function createParsersRouter({
     if (!name) {
       res.status(400).json({ error: 'name is required' })
       return
+    }
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(name)) {
+      res.status(400).json({
+        error: 'name must contain only letters, digits, hyphens, and underscores (max 100 chars)',
+      })
+      return
+    }
+    if (entryUrl) {
+      const urlError = await validatePublicUrl(entryUrl)
+      if (urlError) {
+        res.status(400).json({ error: `entryUrl: ${urlError}` })
+        return
+      }
     }
     try {
       const parser = await parserService.create({
@@ -263,7 +283,8 @@ export function createParsersRouter({
     const steps = result.steps.map(
       ({ id: _si, parserId: _pi, createdAt: _sc, updatedAt: _su, ...rest }) => rest,
     )
-    res.setHeader('Content-Disposition', `attachment; filename="${name}.parser.json"`)
+    const safeName = name.replace(/[^a-zA-Z0-9_-]/g, '_')
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.parser.json"`)
     res.json({ parser: parserData, steps })
   })
 
@@ -476,7 +497,7 @@ export function createParsersRouter({
       res.status(404).json({ error: 'File not found' })
       return
     }
-    res.setHeader('Content-Disposition', `attachment; filename="${file}"`)
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file)}`)
     createReadStream(filePath).pipe(res)
   })
 

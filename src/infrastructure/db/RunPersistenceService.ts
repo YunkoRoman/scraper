@@ -57,8 +57,11 @@ export interface UpdateRunStatusInput {
 
 const MAX_RESUME_TASKS = 10_000
 
-export class RunPersistenceService extends BasePersistenceService<RunInfo, CreateRunInput, UpdateRunStatusInput> {
-
+export class RunPersistenceService extends BasePersistenceService<
+  RunInfo,
+  CreateRunInput,
+  UpdateRunStatusInput
+> {
   private readonly writeBuffer: TaskWriteBuffer = new TaskWriteBuffer(this.makeSink())
 
   private makeSink(): TaskSink {
@@ -81,8 +84,17 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
   // ── Abstract implementations ─────────────────────────────────────────────
 
   async create(input: CreateRunInput): Promise<RunInfo> {
-    await this.db.insert(parserRuns).values({ id: input.runId, parserName: input.parserName, status: 'running' })
-    return { id: input.runId, parserName: input.parserName, browserType: 'playwright', status: 'running', startedAt: new Date(), stats: null }
+    await this.db
+      .insert(parserRuns)
+      .values({ id: input.runId, parserName: input.parserName, status: 'running' })
+    return {
+      id: input.runId,
+      parserName: input.parserName,
+      browserType: 'playwright',
+      status: 'running',
+      startedAt: new Date(),
+      stats: null,
+    }
   }
 
   async findById(id: string): Promise<RunInfo | null> {
@@ -97,8 +109,12 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
   }
 
   async update(id: string, input: UpdateRunStatusInput): Promise<RunInfo> {
-    await this.db.update(parserRuns)
-      .set({ status: input.status, ...(input.stoppedAt !== undefined && { stoppedAt: input.stoppedAt }) })
+    await this.db
+      .update(parserRuns)
+      .set({
+        status: input.status,
+        ...(input.stoppedAt !== undefined && { stoppedAt: input.stoppedAt }),
+      })
       .where(eq(parserRuns.id, id))
     const [row] = await this.db.select().from(parserRuns).where(eq(parserRuns.id, id))
     return { ...row, browserType: 'playwright', stats: null }
@@ -125,7 +141,9 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
     await this._bulkUpsertTasks(runId, tasks)
     const hasFailed = tasks.some((t) => t.state === 'failed')
     const finalStatus = hasFailed ? 'failed' : 'completed'
-    console.log(`[RunPersistenceService] markRunCompleted runId=${runId} tasks=${tasks.length} hasFailed=${hasFailed} → ${finalStatus}`)
+    console.log(
+      `[RunPersistenceService] markRunCompleted runId=${runId} tasks=${tasks.length} hasFailed=${hasFailed} → ${finalStatus}`,
+    )
     await this.update(runId, { status: finalStatus, stoppedAt: new Date() })
   }
 
@@ -140,11 +158,16 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
   }
 
   async saveTaskHtml(taskId: string, html: string): Promise<void> {
-    await this.db.insert(taskResults).values({ taskId, rows: [], html })
+    await this.db
+      .insert(taskResults)
+      .values({ taskId, rows: [], html })
       .onConflictDoUpdate({ target: taskResults.taskId, set: { html: sql`excluded.html` } })
   }
 
-  async getTaskResult(runId: string, taskId: string): Promise<{ rows: Record<string, unknown>[]; html: string | null } | null> {
+  async getTaskResult(
+    runId: string,
+    taskId: string,
+  ): Promise<{ rows: Record<string, unknown>[]; html: string | null } | null> {
     const task = await this.getTask(runId, taskId)
     if (!task) return null
     const [row] = await this.db.select().from(taskResults).where(eq(taskResults.taskId, taskId))
@@ -169,7 +192,9 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
         parent_data: buffered.parent_data ?? null,
       }
     }
-    const [row] = await this.db.select().from(runTasks)
+    const [row] = await this.db
+      .select()
+      .from(runTasks)
       .where(and(eq(runTasks.id, taskId), eq(runTasks.runId, runId)))
     return row ? (row as StoredTask) : null
   }
@@ -196,22 +221,29 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
   ): Promise<{ runs: (RunInfo & { failedCount: number })[]; total: number }> {
     const offset = (page - 1) * limit
     const filter = options?.parserName ? eq(parserRuns.parserName, options.parserName) : undefined
-    const rows = await this.db.select().from(parserRuns)
+    const rows = await this.db
+      .select()
+      .from(parserRuns)
       .where(filter)
       .orderBy(desc(parserRuns.startedAt))
       .limit(limit)
       .offset(offset)
-    const [{ count }] = await this.db.select({ count: sql<number>`count(*)::int` }).from(parserRuns).where(filter)
+    const [{ count }] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(parserRuns)
+      .where(filter)
 
     if (rows.length === 0) return { runs: [], total: count }
 
     const runIds = rows.map((r) => r.id)
-    const statsRows = await this.db.select({
-      runId:    runTasks.runId,
-      state:    runTasks.state,
-      stepType: runTasks.stepType,
-      count:    sql<number>`count(*)::int`,
-    }).from(runTasks)
+    const statsRows = await this.db
+      .select({
+        runId: runTasks.runId,
+        state: runTasks.state,
+        stepType: runTasks.stepType,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(runTasks)
       .where(inArray(runTasks.runId, runIds))
       .groupBy(runTasks.runId, runTasks.state, runTasks.stepType)
 
@@ -222,7 +254,8 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
     }
 
     const parserNames = [...new Set(rows.map((r) => r.parserName))]
-    const parserRows = await this.db.select({ name: parsers.name, browserType: parsers.browserType })
+    const parserRows = await this.db
+      .select({ name: parsers.name, browserType: parsers.browserType })
       .from(parsers)
       .where(inArray(parsers.name, parserNames))
     const browserTypeByParser = new Map(parserRows.map((p) => [p.name, p.browserType]))
@@ -230,7 +263,12 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
     const runs = rows.map((r) => {
       const runStatRows = statsByRun.get(r.id) ?? []
       const stats = this._computeStatsFromRows(runStatRows)
-      return { ...r, browserType: browserTypeByParser.get(r.parserName) ?? 'playwright', stats, failedCount: stats?.failed ?? 0 }
+      return {
+        ...r,
+        browserType: browserTypeByParser.get(r.parserName) ?? 'playwright',
+        stats,
+        failedCount: stats?.failed ?? 0,
+      }
     })
     return { runs, total: count }
   }
@@ -244,25 +282,26 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
   ): Promise<{ tasks: StoredTask[]; total: number }> {
     const offset = (page - 1) * limit
     const clauses: SQL[] = [eq(runTasks.runId, runId)]
-    if (status)   clauses.push(eq(runTasks.state, status))
+    if (status) clauses.push(eq(runTasks.state, status))
     if (stepName) clauses.push(eq(runTasks.stepName, stepName))
     const conditions = and(...clauses)
-    const rows = await this.db.select().from(runTasks)
+    const rows = await this.db.select().from(runTasks).where(conditions).limit(limit).offset(offset)
+    const [{ count }] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(runTasks)
       .where(conditions)
-      .limit(limit)
-      .offset(offset)
-    const [{ count }] = await this.db.select({ count: sql<number>`count(*)::int` })
-      .from(runTasks).where(conditions)
     return { tasks: rows as StoredTask[], total: count }
   }
 
-  async getStepStats(runId: string): Promise<{ stepName: string; total: number; success: number; failed: number }[]> {
+  async getStepStats(
+    runId: string,
+  ): Promise<{ stepName: string; total: number; success: number; failed: number }[]> {
     return this.db
       .select({
         stepName: runTasks.stepName,
-        total:   sql<number>`count(*)::int`,
+        total: sql<number>`count(*)::int`,
         success: sql<number>`count(*) filter (where state = 'success')::int`,
-        failed:  sql<number>`count(*) filter (where state = 'failed')::int`,
+        failed: sql<number>`count(*) filter (where state = 'failed')::int`,
       })
       .from(runTasks)
       .where(eq(runTasks.runId, runId))
@@ -279,13 +318,15 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
   }
 
   async resetFailedTasks(runId: string): Promise<void> {
-    await this.db.update(runTasks)
+    await this.db
+      .update(runTasks)
       .set({ state: 'pending', error: null, attempts: 0, updatedAt: new Date() })
       .where(and(eq(runTasks.runId, runId), eq(runTasks.state, 'failed')))
   }
 
   async listParsersWithLatestRun(search: string): Promise<RawParserEnriched[]> {
-    const pattern = `%${search ?? ''}%`
+    const escaped = (search ?? '').replace(/[%_\\]/g, '\\$&')
+    const pattern = `%${escaped}%`
 
     type Row = {
       parser_id: string
@@ -330,20 +371,27 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
     return (result.rows as Row[]).map((r) => ({
       id: r.parser_id,
       name: r.name,
-      dbStatus: (r.run_status === 'running' ? 'running'
-        : r.run_status === 'stopped' ? 'stopped'
-        : r.run_status === 'failed' ? 'idle'
-        : 'idle') as 'running' | 'stopped' | 'idle',
-      lastRunDate: r.started_at ? (r.started_at instanceof Date ? r.started_at.toISOString() : String(r.started_at)) : null,
-      lastRunId: r.run_id ?? null,
-      successRate: r.total_count > 0
-        ? Math.round((r.success_count / r.total_count) * 100)
+      dbStatus: (r.run_status === 'running'
+        ? 'running'
+        : r.run_status === 'stopped'
+          ? 'stopped'
+          : r.run_status === 'failed'
+            ? 'idle'
+            : 'idle') as 'running' | 'stopped' | 'idle',
+      lastRunDate: r.started_at
+        ? r.started_at instanceof Date
+          ? r.started_at.toISOString()
+          : String(r.started_at)
         : null,
+      lastRunId: r.run_id ?? null,
+      successRate: r.total_count > 0 ? Math.round((r.success_count / r.total_count) * 100) : null,
     }))
   }
 
   /** Returns daily run counts for the last 30 days. Dates with no runs are omitted from the result. */
-  async getPerformanceLast30Days(): Promise<{ date: string; successful: number; failed: number }[]> {
+  async getPerformanceLast30Days(): Promise<
+    { date: string; successful: number; failed: number }[]
+  > {
     type Row = { date: string; successful: number; failed: number }
 
     const result = await this.db.execute<Row>(sql`
@@ -398,72 +446,96 @@ export class RunPersistenceService extends BasePersistenceService<RunInfo, Creat
     await this.db.transaction(async (tx) => {
       for (let i = 0; i < tasks.length; i += BATCH) {
         const chunk = tasks.slice(i, i + BATCH)
-        await tx.insert(runTasks).values(chunk.map((t) => ({
-          id:           t.id,
-          runId,
-          url:          t.url,
-          stepName:     String(t.stepName),
-          stepType:     t.stepType,
-          state:        t.state,
-          attempts:     t.attempts,
-          maxAttempts:  t.maxAttempts,
-          error:        t.error ?? null,
-          parentTaskId: t.parentTaskId ?? null,
-          parent_data:  t.parent_data ?? null,
-          updatedAt:    now,
-        }))).onConflictDoUpdate({
-          target: runTasks.id,
-          set: {
-            state:     sql`excluded.state`,
-            attempts:  sql`excluded.attempts`,
-            error:     sql`excluded.error`,
-            updatedAt: sql`excluded.updated_at`,
-          },
-        })
+        await tx
+          .insert(runTasks)
+          .values(
+            chunk.map((t) => ({
+              id: t.id,
+              runId,
+              url: t.url,
+              stepName: String(t.stepName),
+              stepType: t.stepType,
+              state: t.state,
+              attempts: t.attempts,
+              maxAttempts: t.maxAttempts,
+              error: t.error ?? null,
+              parentTaskId: t.parentTaskId ?? null,
+              parent_data: t.parent_data ?? null,
+              updatedAt: now,
+            })),
+          )
+          .onConflictDoUpdate({
+            target: runTasks.id,
+            set: {
+              state: sql`excluded.state`,
+              attempts: sql`excluded.attempts`,
+              error: sql`excluded.error`,
+              updatedAt: sql`excluded.updated_at`,
+            },
+          })
       }
     })
   }
 
-  private async _bulkSaveResults(batch: { taskId: string; rows: Record<string, unknown>[] }[]): Promise<void> {
+  private async _bulkSaveResults(
+    batch: { taskId: string; rows: Record<string, unknown>[] }[],
+  ): Promise<void> {
     if (batch.length === 0) return
     const BATCH = 500
     await this.db.transaction(async (tx) => {
       for (let i = 0; i < batch.length; i += BATCH) {
         const chunk = batch.slice(i, i + BATCH)
-        await tx.insert(taskResults).values(chunk.map((b) => ({ taskId: b.taskId, rows: b.rows })))
+        await tx
+          .insert(taskResults)
+          .values(chunk.map((b) => ({ taskId: b.taskId, rows: b.rows })))
           .onConflictDoUpdate({ target: taskResults.taskId, set: { rows: sql`excluded.rows` } })
       }
     })
   }
 
   private async _computeStats(runId: string): Promise<RunStats | null> {
-    const rows = await this.db.select({
-      runId:    runTasks.runId,
-      state:    runTasks.state,
-      stepType: runTasks.stepType,
-      count:    sql<number>`count(*)::int`,
-    }).from(runTasks)
+    const rows = await this.db
+      .select({
+        runId: runTasks.runId,
+        state: runTasks.state,
+        stepType: runTasks.stepType,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(runTasks)
       .where(eq(runTasks.runId, runId))
       .groupBy(runTasks.runId, runTasks.state, runTasks.stepType)
     return this._computeStatsFromRows(rows)
   }
 
-  private _computeStatsFromRows(rows: { state: string; stepType: string; count: number }[]): RunStats | null {
+  private _computeStatsFromRows(
+    rows: { state: string; stepType: string; count: number }[],
+  ): RunStats | null {
     if (rows.length === 0) return null
-    const total     = rows.reduce((s, r) => s + r.count, 0)
-    const get       = (state: string) => rows.filter(r => r.state === state).reduce((s, r) => s + r.count, 0)
-    const getType   = (type: string, state: string) => rows.find(r => r.stepType === type && r.state === state)?.count ?? 0
-    const typeTotal = (type: string) => rows.filter(r => r.stepType === type).reduce((s, r) => s + r.count, 0)
+    const total = rows.reduce((s, r) => s + r.count, 0)
+    const get = (state: string) =>
+      rows.filter((r) => r.state === state).reduce((s, r) => s + r.count, 0)
+    const getType = (type: string, state: string) =>
+      rows.find((r) => r.stepType === type && r.state === state)?.count ?? 0
+    const typeTotal = (type: string) =>
+      rows.filter((r) => r.stepType === type).reduce((s, r) => s + r.count, 0)
     return {
       total,
-      pending:    get('pending'),
-      retry:      get('retry'),
-      success:    get('success'),
-      failed:     get('failed'),
-      aborted:    get('aborted'),
+      pending: get('pending'),
+      retry: get('retry'),
+      success: get('success'),
+      failed: get('failed'),
+      aborted: get('aborted'),
       inProgress: get('in_progress'),
-      traversers: { total: typeTotal('traverser'), success: getType('traverser', 'success'), failed: getType('traverser', 'failed') },
-      extractors: { total: typeTotal('extractor'),  success: getType('extractor',  'success'), failed: getType('extractor',  'failed') },
+      traversers: {
+        total: typeTotal('traverser'),
+        success: getType('traverser', 'success'),
+        failed: getType('traverser', 'failed'),
+      },
+      extractors: {
+        total: typeTotal('extractor'),
+        success: getType('extractor', 'success'),
+        failed: getType('extractor', 'failed'),
+      },
     }
   }
 }
