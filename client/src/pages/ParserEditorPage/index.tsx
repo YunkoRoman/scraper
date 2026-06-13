@@ -136,19 +136,12 @@ export function ParserEditorPage() {
             </label>
             <input
               value={newParserName}
-              onChange={(e) =>
-                setNewParserName(
-                  e.target.value
-                    .toLowerCase()
-                    .replace(/\s+/g, '-')
-                    .replace(/[^a-z0-9_-]/g, ''),
-                )
-              }
+              onChange={(e) => setNewParserName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
               placeholder="my-parser"
               className={fieldClass}
             />
-            <p className="text-xs text-gray-400 mt-1">Lowercase letters, numbers, hyphens</p>
+            <p className="text-xs text-gray-400 mt-1">Letters, numbers, spaces, hyphens</p>
           </motion.div>
 
           {/* Entry URL */}

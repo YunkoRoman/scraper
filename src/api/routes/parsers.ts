@@ -89,9 +89,10 @@ export function createParsersRouter({
       return
     }
     const name = newName ?? incomingParser.name
-    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(name)) {
+    if (!/^[a-zA-Z0-9 _-]{1,100}$/.test(name)) {
       res.status(400).json({
-        error: 'name must contain only letters, digits, hyphens, and underscores (max 100 chars)',
+        error:
+          'name must contain only letters, digits, spaces, hyphens, and underscores (max 100 chars)',
       })
       return
     }
@@ -201,9 +202,10 @@ export function createParsersRouter({
       res.status(400).json({ error: 'name is required' })
       return
     }
-    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(name)) {
+    if (!/^[a-zA-Z0-9 _-]{1,100}$/.test(name)) {
       res.status(400).json({
-        error: 'name must contain only letters, digits, hyphens, and underscores (max 100 chars)',
+        error:
+          'name must contain only letters, digits, spaces, hyphens, and underscores (max 100 chars)',
       })
       return
     }
@@ -285,7 +287,7 @@ export function createParsersRouter({
     const steps = result.steps.map(
       ({ id: _si, parserId: _pi, createdAt: _sc, updatedAt: _su, ...rest }) => rest,
     )
-    const safeName = name.replace(/[^a-zA-Z0-9_-]/g, '_')
+    const safeName = name.replace(/[^a-zA-Z0-9 _-]/g, '_')
     res.setHeader('Content-Disposition', `attachment; filename="${safeName}.parser.json"`)
     res.json({ parser: parserData, steps })
   })
