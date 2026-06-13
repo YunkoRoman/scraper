@@ -12,6 +12,7 @@ import type { ParserConfig } from '../../domain/entities/Parser.js'
 import type { StepName } from '../../domain/value-objects/StepName.js'
 import type { StepSettings } from '../../domain/value-objects/StepSettings.js'
 import { stepName } from '../../domain/value-objects/StepName.js'
+import { makeSolveCFSnippet } from '../flaresolverr/FlareSolverrService.js'
 
 const data = workerData as WorkerData
 pipeConsole(data.stepName)
@@ -159,7 +160,8 @@ async function main() {
     if (!step) throw new Error(`Step "${data.stepName}" not found in parser "${config.name}"`)
     stepSettings = step.settings
   } else {
-    const run = new AsyncFunction('page', 'task', data.stepCode)
+    const solveCFSnippet = makeSolveCFSnippet(process.env.FLARESOLVERR_URL ?? '')
+    const run = new AsyncFunction('page', 'task', solveCFSnippet + '\n' + data.stepCode)
     const { Traverser: T } = await import('../../domain/entities/Traverser.js')
     step = new T(stepName(data.stepName), run, data.stepSettings)
     stepSettings = data.stepSettings
