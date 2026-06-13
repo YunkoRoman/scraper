@@ -35,6 +35,7 @@ export class ParserOrchestrator extends EventEmitter {
   private completionPromise!: Promise<void>
   private resolveCompletion!: () => void
   private globalActive = 0
+  private pendingMessageHandlers = 0
   private dispatchQueue: string[] = []
   private taskHtml = new Map<string, string>()
   private activeTaskIds = new Set<string>()
@@ -237,9 +238,13 @@ export class ParserOrchestrator extends EventEmitter {
       resourceLimits: { maxOldGenerationSizeMb: 512, maxYoungGenerationSizeMb: 128 },
     })
     worker.on('message', (msg: WorkerOutMessage) => {
-      this.handleWorkerMessage(msg).catch((err) =>
-        console.error('[orchestrator] handler failed', err),
-      )
+      this.pendingMessageHandlers++
+      const p = this.handleWorkerMessage(msg)
+      p.catch((err) => console.error('[orchestrator] handler failed', err))
+      void p.finally(() => {
+        this.pendingMessageHandlers--
+        this.checkCompletion()
+      })
     })
     worker.on('error', (err) => {
       this.emit('error', err)
@@ -417,7 +422,7 @@ export class ParserOrchestrator extends EventEmitter {
   }
 
   private checkCompletion(): void {
-    if (this.stopped || this.completing) return
+    if (this.stopped || this.completing || this.pendingMessageHandlers > 0) return
     this.completing = true
     void (async () => {
       if (!(await this.store.isComplete())) {

@@ -199,8 +199,16 @@ async function main() {
       adapter.close().catch(console.error)
       return
     }
-    if (msg.type === 'PROCESS_PAGE' && running) {
-      enqueue(msg.task, step)
+    if (msg.type === 'PROCESS_PAGE') {
+      if (running) {
+        enqueue(msg.task, step)
+      } else {
+        parentPort!.postMessage({
+          type: 'PAGE_FAILED',
+          taskId: msg.task.id,
+          error: 'Worker is shutting down',
+        })
+      }
     }
   })
 }
