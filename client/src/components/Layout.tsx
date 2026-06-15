@@ -187,23 +187,40 @@ export function Layout({ children }: Props) {
 
         {/* Nav items */}
         <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-          {NAV.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => navigate(NAV_ROUTES[item.id])}
-              title={collapsed ? item.label : undefined}
-              className={[
-                'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                collapsed ? 'justify-center' : '',
-                activePage === item.id
-                  ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white',
-              ].join(' ')}
-            >
-              {item.icon}
-              {!collapsed && item.label}
-            </button>
-          ))}
+          {NAV.map((item) => {
+            const isActive = activePage === item.id
+            return (
+              <button
+                key={item.id}
+                onClick={() => navigate(NAV_ROUTES[item.id])}
+                title={collapsed ? item.label : undefined}
+                className={[
+                  'w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-colors',
+                  collapsed ? 'justify-center py-1.5' : 'px-3 py-2',
+                  !collapsed &&
+                    (isActive
+                      ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'),
+                ].join(' ')}
+              >
+                {collapsed ? (
+                  <span
+                    className={[
+                      'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+                      isActive
+                        ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300'
+                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white',
+                    ].join(' ')}
+                  >
+                    {item.icon}
+                  </span>
+                ) : (
+                  item.icon
+                )}
+                {!collapsed && item.label}
+              </button>
+            )
+          })}
         </nav>
 
         {/* Theme toggle */}
@@ -212,12 +229,19 @@ export function Layout({ children }: Props) {
             onClick={cycleTheme}
             title={collapsed ? `Theme: ${settings.theme}` : undefined}
             className={[
-              'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400',
-              'hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors',
-              collapsed ? 'justify-center' : '',
+              'w-full flex items-center gap-3 rounded-lg text-sm text-gray-600 dark:text-gray-400 transition-colors',
+              collapsed
+                ? 'justify-center py-1.5'
+                : 'px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white',
             ].join(' ')}
           >
-            <ThemeIcon />
+            {collapsed ? (
+              <span className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors">
+                <ThemeIcon />
+              </span>
+            ) : (
+              <ThemeIcon />
+            )}
             {!collapsed && <span className="capitalize">{settings.theme}</span>}
           </button>
         </div>
