@@ -13,6 +13,7 @@ import { TaskDetailPage } from './pages/TaskDetailPage'
 import { ParserDetailPage } from './pages/ParserDetailPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
+import { DocsPage } from './pages/DocsPage'
 import { PageTransition } from './components/motion/PageTransition'
 
 function AnimatedRoutes() {
@@ -31,6 +32,7 @@ function AnimatedRoutes() {
           <Route path="/jobs/:runId/tasks/:taskId" element={<TaskDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/debug" element={<DebugPage />} />
+          <Route path="/docs" element={<DocsPage />} />
         </Routes>
       </PageTransition>
     </AnimatePresence>

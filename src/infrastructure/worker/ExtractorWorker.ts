@@ -12,6 +12,7 @@ import type { ParserConfig } from '../../domain/entities/Parser.js'
 import type { StepName } from '../../domain/value-objects/StepName.js'
 import type { StepSettings } from '../../domain/value-objects/StepSettings.js'
 import { stepName } from '../../domain/value-objects/StepName.js'
+import { makeSolveCFSnippet } from '../flaresolverr/FlareSolverrService.js'
 
 const data = workerData as WorkerData
 pipeConsole(data.stepName)
@@ -164,7 +165,13 @@ async function main() {
     if (!step) throw new Error(`Step "${data.stepName}" not found in parser "${config.name}"`)
     stepSettings = step.settings
   } else {
-    const run = new AsyncFunction('page', 'task', data.stepCode)
+    const solverUrl =
+      ('stepSettings' in data ? data.stepSettings?.flareSolverrUrl : undefined) ??
+      data.browserSettings?.flareSolverrUrl ??
+      process.env.FLARESOLVERR_URL ??
+      ''
+    const solveCFSnippet = makeSolveCFSnippet(solverUrl)
+    const run = new AsyncFunction('page', 'task', solveCFSnippet + '\n' + data.stepCode)
     const { Extractor: E } = await import('../../domain/entities/Extractor.js')
     const outFile = data.outputFile ?? `${data.stepName}.csv`
     step = new E(stepName(data.stepName), run, outFile, data.stepSettings)
