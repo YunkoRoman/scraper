@@ -107,6 +107,7 @@ export const stepVersions = pgTable('step_versions', {
     .notNull()
     .references(() => steps.id, { onDelete: 'cascade' }),
   code: text('code').notNull(),
+  versionNumber: integer('version_number'),
   savedAt: timestamp('saved_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

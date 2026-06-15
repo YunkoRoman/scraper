@@ -534,6 +534,7 @@ export interface StepVersion {
   id: string
   stepId: string
   code: string
+  versionNumber: number | null
   savedAt: string
 }
 
@@ -542,6 +543,17 @@ export async function listStepVersions(parserId: string, stepName: string): Prom
     `/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}/versions`,
   )
   return r.versions
+}
+
+export async function createStepVersion(
+  parserId: string,
+  stepName: string,
+): Promise<{ version: StepVersion | null; unchanged: boolean }> {
+  const r = await apiRequest<{ version: StepVersion | null; unchanged?: boolean }>(
+    `/api/parsers/${parserId}/steps/${encodeURIComponent(stepName)}/versions`,
+    { method: 'POST' },
+  )
+  return { version: r.version, unchanged: r.unchanged ?? false }
 }
 
 export async function restoreStepVersion(

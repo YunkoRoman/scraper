@@ -206,7 +206,7 @@ export class ParserPersistenceService extends BasePersistenceService<
         if (existing && existing.code !== input.code && existing.code.trim().length > 0) {
           await this.versions
             .save(stepId, existing.code)
-            .catch((e) => console.error('[step-version] save failed:', e))
+            .catch((e) => console.error('[step-version] autosave failed:', e))
         }
       }
       const [updated] = await this.db

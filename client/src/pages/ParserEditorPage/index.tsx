@@ -49,11 +49,13 @@ export function ParserEditorPage() {
     selectedModuleId,
     activeItemType,
     saveStatus,
+    latestVersionNumber,
     loading,
     error,
     selectStep,
     handleCodeChange,
     saveNow,
+    saveVersion,
     addStep,
     removeStep,
     saveParserSettings,
@@ -80,6 +82,7 @@ export function ParserEditorPage() {
   const [showSettings, setShowSettings] = useState(false)
   const [showStepSettings, setShowStepSettings] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0)
 
   const [addingModule, setAddingModule] = useState(false)
   const [newModuleName, setNewModuleName] = useState('')
@@ -90,9 +93,13 @@ export function ParserEditorPage() {
       ? 'Saving...'
       : saveStatus === 'saved'
         ? 'Saved'
-        : saveStatus === 'error'
-          ? 'Save failed'
-          : ''
+        : saveStatus === 'versioned'
+          ? `Saved as v${latestVersionNumber}`
+          : saveStatus === 'unchanged'
+            ? 'No changes'
+            : saveStatus === 'error'
+              ? 'Save failed'
+              : ''
 
   async function confirmAddModule() {
     const name = newModuleName.trim()
@@ -324,7 +331,7 @@ export function ParserEditorPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.18 }}
-                className={`text-xs ${saveStatus === 'error' ? 'text-rose-400' : saveStatus === 'saved' ? 'text-emerald-500' : 'text-gray-400'}`}
+                className={`text-xs ${saveStatus === 'error' ? 'text-rose-400' : saveStatus === 'versioned' ? 'text-emerald-500' : saveStatus === 'saved' ? 'text-emerald-500' : 'text-gray-400'}`}
               >
                 {saveStatusLabel}
               </motion.span>
@@ -332,9 +339,13 @@ export function ParserEditorPage() {
           </AnimatePresence>
           <SpringButton
             variant="success"
-            onClick={saveNow}
+            onClick={async () => {
+              await saveVersion()
+              setHistoryRefreshKey((k) => k + 1)
+            }}
             loading={saveStatus === 'saving'}
             className="px-3 py-1 text-xs"
+            disabled={!selectedStep || activeItemType !== 'step'}
           >
             Save
           </SpringButton>
@@ -672,6 +683,7 @@ export function ParserEditorPage() {
                   <StepVersionsPanel
                     parserId={parserId}
                     stepName={selectedStep.name}
+                    refreshKey={historyRefreshKey}
                     onRestored={(code) => {
                       handleCodeChange(code)
                       setShowHistory(false)

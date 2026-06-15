@@ -11,6 +11,8 @@ import {
   getModule,
   updateModule,
   deleteModule,
+  createStepVersion,
+  listStepVersions,
   type ParserRow,
   type StepRow,
   type UpdateStepInput,
@@ -18,7 +20,7 @@ import {
   type ParserFileRow,
 } from '../api'
 
-export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'versioned' | 'unchanged'
 
 export function useParserEditor(parserId: string) {
   const [parser, setParser] = useState<ParserRow | null>(null)
@@ -32,6 +34,7 @@ export function useParserEditor(parserId: string) {
   const [modules, setModules] = useState<Array<Omit<ParserFileRow, 'content'>>>([])
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null)
   const [activeItemType, setActiveItemType] = useState<'step' | 'module'>('step')
+  const [latestVersionNumber, setLatestVersionNumber] = useState<number>(0)
 
   const selectedStep = steps.find((s) => s.name === selectedStepName) ?? null
 
@@ -41,7 +44,7 @@ export function useParserEditor(parserId: string) {
     setLoading(true)
     setError(null)
     Promise.all([getParser(parserId), listModules(parserId)])
-      .then(([{ parser: p, steps: ss }, ms]) => {
+      .then(async ([{ parser: p, steps: ss }, ms]) => {
         setParser(p)
         setSteps(ss)
         setModules(ms)
@@ -49,6 +52,9 @@ export function useParserEditor(parserId: string) {
           setSelectedStepName(ss[0].name)
           setCode(ss[0].code)
           setActiveItemType('step')
+          const versions = await listStepVersions(parserId, ss[0].name).catch(() => [])
+          const maxNum = versions.reduce((m, v) => Math.max(m, v.versionNumber ?? 0), 0)
+          setLatestVersionNumber(maxNum)
         }
       })
       .catch((e: Error) => setError(e.message))
@@ -72,8 +78,14 @@ export function useParserEditor(parserId: string) {
       setSelectedStepName(name)
       setCode(s.code)
       setSaveStatus('idle')
+      listStepVersions(parserId, name)
+        .then((versions) => {
+          const maxNum = versions.reduce((m, v) => Math.max(m, v.versionNumber ?? 0), 0)
+          setLatestVersionNumber(maxNum)
+        })
+        .catch(() => {})
     },
-    [steps],
+    [steps, parserId],
   )
 
   const selectModule = useCallback(
@@ -130,6 +142,25 @@ export function useParserEditor(parserId: string) {
       const updated = await updateStep(parserId, selectedStepName, { code })
       setSteps((prev) => prev.map((s) => (s.name === selectedStepName ? updated : s)))
       setSaveStatus('saved')
+    } catch {
+      setSaveStatus('error')
+    }
+  }, [parserId, selectedStepName, code])
+
+  const saveVersion = useCallback(async () => {
+    if (!parserId || !selectedStepName) return
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    setSaveStatus('saving')
+    try {
+      const updated = await updateStep(parserId, selectedStepName, { code })
+      setSteps((prev) => prev.map((s) => (s.name === selectedStepName ? updated : s)))
+      const { version, unchanged } = await createStepVersion(parserId, selectedStepName)
+      if (unchanged) {
+        setSaveStatus('unchanged')
+      } else {
+        setLatestVersionNumber(version?.versionNumber ?? 0)
+        setSaveStatus('versioned')
+      }
     } catch {
       setSaveStatus('error')
     }
@@ -252,11 +283,13 @@ export function useParserEditor(parserId: string) {
     selectedModuleId,
     activeItemType,
     saveStatus,
+    latestVersionNumber,
     loading,
     error,
     selectStep,
     handleCodeChange,
     saveNow,
+    saveVersion,
     addStep,
     removeStep,
     saveParserSettings,

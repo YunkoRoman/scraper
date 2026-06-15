@@ -46,7 +46,9 @@ const solveCF = async (url, options = {}) => {
   if (typeof __data.solution?.response === 'string' && __data.solution.response.length > 10_000_000) {
     throw new Error('solveCF: response too large (> 10 MB)');
   }
-  if (__data.solution?.status !== 'ok') throw new Error('solveCF: ' + (__data.message ?? 'solver returned non-ok status'));
+  const __topStatus = String(__data.status ?? '');
+  if (__topStatus !== 'ok' && !__topStatus.toLowerCase().includes('solved') && !(__data.message ?? '').toLowerCase().includes('solved')) throw new Error('solveCF: ' + (__data.message ?? 'solver returned non-ok status'));
+  if (!__data.solution) throw new Error('solveCF: solver returned ok status but no solution object');
   return __data.solution;
 };
 `

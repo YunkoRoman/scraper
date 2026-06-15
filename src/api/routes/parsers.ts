@@ -608,6 +608,21 @@ export function createParsersRouter({
     res.json({ ok: true })
   })
 
+  router.post('/:id/steps/:step/versions', async (req, res) => {
+    const { id: parserId }: ParserRow = res.locals.parser
+    const step = await parserService.getStep(parserId, req.params.step)
+    if (!step) {
+      res.status(404).json({ error: `Step "${req.params.step}" not found` })
+      return
+    }
+    const version = await stepVersionService.createMajor(step.id, step.code)
+    if (!version) {
+      res.status(200).json({ version: null, unchanged: true })
+      return
+    }
+    res.status(201).json({ version })
+  })
+
   router.get('/:id/steps/:step/versions', async (req, res) => {
     const { id: parserId }: ParserRow = res.locals.parser
     const step = await parserService.getStep(parserId, req.params.step)
