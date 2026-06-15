@@ -221,6 +221,8 @@ export class ParserOrchestrator extends EventEmitter {
             outputFile,
             stepSettings: step.settings,
             stepName: String(step.name),
+            parserName: this.config.name,
+            helperFiles: this.config.helperFiles ?? [],
             __workerPath: tsWorkerFile,
             browserSettings: this.config.browserSettings,
           }
@@ -230,6 +232,8 @@ export class ParserOrchestrator extends EventEmitter {
             outputFile,
             stepSettings: step.settings,
             stepName: String(step.name),
+            parserName: this.config.name,
+            helperFiles: this.config.helperFiles ?? [],
             browserSettings: this.config.browserSettings,
           }
 
