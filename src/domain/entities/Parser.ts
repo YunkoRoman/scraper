@@ -6,7 +6,7 @@ import type { StepSettings } from '../value-objects/StepSettings.js'
 import type { TraverserResult } from '../value-objects/TraverserResult.js'
 import { Traverser } from './Traverser.js'
 import { Extractor } from './Extractor.js'
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 import type { Step } from './Step.js'
 import type { PageTask } from './PageTask.js'
 
@@ -37,8 +37,17 @@ export interface ParserConfig {
   retryConfig: RetryConfig
   deduplication: boolean
   concurrentQuota?: number
-  browserSettings?: Pick<StepSettings, 'browser_type' | 'launchOptions' | 'contextOptions' | 'initScripts' | 'userAgent' | 'proxySettings'>
+  browserSettings?: Pick<
+    StepSettings,
+    | 'browser_type'
+    | 'launchOptions'
+    | 'contextOptions'
+    | 'initScripts'
+    | 'userAgent'
+    | 'proxySettings'
+  >
   filePath?: string
+  helperFiles?: Array<{ path: string; content: string }>
 }
 
 export interface ParserDefinition {
@@ -48,11 +57,19 @@ export interface ParserDefinition {
   retryConfig?: Partial<RetryConfig>
   deduplication?: boolean
   concurrentQuota?: number
-  browserSettings?: Pick<StepSettings, 'browser_type' | 'launchOptions' | 'contextOptions' | 'initScripts' | 'userAgent' | 'proxySettings'>
+  browserSettings?: Pick<
+    StepSettings,
+    | 'browser_type'
+    | 'launchOptions'
+    | 'contextOptions'
+    | 'initScripts'
+    | 'userAgent'
+    | 'proxySettings'
+  >
   steps: Record<string, StepDef>
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export function defineParser(def: ParserDefinition): ParserConfig {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const steps = new Map<StepName, Step<any>>()
