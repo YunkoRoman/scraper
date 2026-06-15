@@ -17,6 +17,7 @@ async function migrate() {
     '0006_step_versions.sql',
     '0007_auth.sql',
     '0008_org_isolation.sql',
+    '0009_parser_files.sql',
   ]
   for (const file of migrations) {
     const sql = await readFile(resolve(__dirname, 'migrations', file), 'utf8')

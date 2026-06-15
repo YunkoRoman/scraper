@@ -1,5 +1,14 @@
 // src/infrastructure/db/schema.ts
-import { pgTable, uuid, text, boolean, integer, jsonb, timestamp } from 'drizzle-orm/pg-core'
+import {
+  pgTable,
+  uuid,
+  text,
+  boolean,
+  integer,
+  jsonb,
+  timestamp,
+  unique,
+} from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 export const parsers = pgTable('parsers', {
@@ -100,6 +109,23 @@ export const stepVersions = pgTable('step_versions', {
   code: text('code').notNull(),
   savedAt: timestamp('saved_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+export const parserFiles = pgTable(
+  'parser_files',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    parserId: uuid('parser_id')
+      .notNull()
+      .references(() => parsers.id, { onDelete: 'cascade' }),
+    path: text('path').notNull(),
+    content: text('content').notNull().default(''),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    parserPathUnique: unique('parser_files_parser_path_unique').on(t.parserId, t.path),
+  }),
+)
 
 export const organizations = pgTable('organizations', {
   id: uuid('id').primaryKey().defaultRandom(),
