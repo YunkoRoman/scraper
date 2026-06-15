@@ -38,4 +38,12 @@ describe('transformImports', () => {
     const code = `const page = 1\nreturn []`
     expect(transformImports(code, DIR)).toBe(code)
   })
+
+  it('leaves traversal import paths untouched', () => {
+    const code = `import { x } from './../../../etc/passwd'\nreturn []`
+    const out = transformImports(code, DIR)
+    // The line must be left as-is — not rewritten to an await import() call.
+    expect(out).toContain(`import { x } from './../../../etc/passwd'`)
+    expect(out).not.toContain('await import(')
+  })
 })

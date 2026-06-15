@@ -1,5 +1,7 @@
 // src/infrastructure/worker/ExtractorWorker.ts
 import { parentPort, workerData } from 'node:worker_threads'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import type { WorkerInMessage, WorkerOutMessage, WorkerData } from './messages.js'
 import { pipeConsole } from './pipeConsole.js'
 import { mergeWorkerSettings } from './mergeWorkerSettings.js'
@@ -13,6 +15,7 @@ import type { StepName } from '../../domain/value-objects/StepName.js'
 import type { StepSettings } from '../../domain/value-objects/StepSettings.js'
 import { stepName } from '../../domain/value-objects/StepName.js'
 import { makeSolveCFSnippet } from '../flaresolverr/FlareSolverrService.js'
+import { transformImports } from './transformImports.js'
 
 const data = workerData as WorkerData
 pipeConsole(data.stepName)
@@ -171,7 +174,27 @@ async function main() {
       process.env.FLARESOLVERR_URL ??
       ''
     const solveCFSnippet = makeSolveCFSnippet(solverUrl)
-    const run = new AsyncFunction('page', 'task', solveCFSnippet + '\n' + data.stepCode)
+    let stepCode = data.stepCode
+    if (data.helperFiles?.length) {
+      const base = '/tmp/scraper-modules'
+      const tempDir = resolve(base, data.parserName ?? data.stepName)
+      if (!tempDir.startsWith(base + '/')) {
+        throw new Error(
+          `Rejected malformed parser/step name in worker tempDir: ${data.parserName ?? data.stepName}`,
+        )
+      }
+      mkdirSync(tempDir, { recursive: true })
+      for (const file of data.helperFiles) {
+        const target = resolve(tempDir, `${file.path}.ts`)
+        if (!target.startsWith(tempDir + '/')) {
+          throw new Error(`Rejected helper file path outside sandbox: ${file.path}`)
+        }
+        writeFileSync(target, file.content)
+      }
+      stepCode = transformImports(stepCode, tempDir)
+    }
+
+    const run = new AsyncFunction('page', 'task', solveCFSnippet + '\n' + stepCode)
     const { Extractor: E } = await import('../../domain/entities/Extractor.js')
     const outFile = data.outputFile ?? `${data.stepName}.csv`
     step = new E(stepName(data.stepName), run, outFile, data.stepSettings)

@@ -17,13 +17,31 @@ function importPath(tempDir: string, name: string): string {
   return `${tempDir}/${name}.ts`
 }
 
+// Only bare identifiers (no slashes, dots, or null bytes) are accepted as module names.
+// This prevents path traversal via import paths like './../../../etc/passwd'.
+function isValidModuleName(name: string): boolean {
+  return /^[A-Za-z_$][\w$]*$/.test(name)
+}
+
 function rewriteLine(line: string, tempDir: string): string | null {
   let m = line.match(NAMED)
-  if (m) return `const {${m[1]}} = await import('${importPath(tempDir, m[2])}')`
+  if (m) {
+    const name = m[2]
+    if (!isValidModuleName(name)) return null
+    return `const {${m[1]}} = await import('${importPath(tempDir, name)}')`
+  }
   m = line.match(NAMESPACE)
-  if (m) return `const ${m[1]} = await import('${importPath(tempDir, m[2])}')`
+  if (m) {
+    const name = m[2]
+    if (!isValidModuleName(name)) return null
+    return `const ${m[1]} = await import('${importPath(tempDir, name)}')`
+  }
   m = line.match(DEFAULT)
-  if (m) return `const { default: ${m[1]} } = await import('${importPath(tempDir, m[2])}')`
+  if (m) {
+    const name = m[2]
+    if (!isValidModuleName(name)) return null
+    return `const { default: ${m[1]} } = await import('${importPath(tempDir, name)}')`
+  }
   return null
 }
 
