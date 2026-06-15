@@ -10,6 +10,7 @@ import { RunPersistenceService } from '../infrastructure/db/RunPersistenceServic
 import { ParserPersistenceService } from '../infrastructure/db/ParserPersistenceService.js'
 import { SchedulePersistenceService } from '../infrastructure/db/SchedulePersistenceService.js'
 import { StepVersionPersistenceService } from '../infrastructure/db/StepVersionPersistenceService.js'
+import { ModulePersistenceService } from '../infrastructure/db/ModulePersistenceService.js'
 import { SchedulerService } from '../application/services/SchedulerService.js'
 import { broadcast } from './sse.js'
 import { WebhookService } from '../infrastructure/webhook/WebhookService.js'
@@ -27,6 +28,7 @@ const dbLoader = new DbParserLoader()
 const runPersistence = new RunPersistenceService()
 const parserService = new ParserPersistenceService()
 const stepVersionService = new StepVersionPersistenceService()
+const moduleService = new ModulePersistenceService()
 parserService.setVersionService(stepVersionService)
 const runner = new ParserRunnerService(
   new RunParser(dbLoader, outputDir, runPersistence),
@@ -103,6 +105,7 @@ app.use(
     outputDir,
     schedulePersistence,
     stepVersionService,
+    moduleService,
   }),
 )
 app.use('/api/jobs', createJobsRouter({ runner, runPersistence }))

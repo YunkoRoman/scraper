@@ -16,6 +16,7 @@ import { broadcast, getClients, initSSE, writeSSE } from '../sse.js'
 import type { SchedulePersistenceService } from '../../infrastructure/db/SchedulePersistenceService.js'
 import { SchedulerService } from '../../application/services/SchedulerService.js'
 import type { StepVersionPersistenceService } from '../../infrastructure/db/StepVersionPersistenceService.js'
+import type { ModulePersistenceService } from '../../infrastructure/db/ModulePersistenceService.js'
 import { CsvRowReader } from '../../infrastructure/csv/CsvRowReader.js'
 import { requireRole } from '../middleware/requireRole.js'
 import { validatePublicUrl } from '../utils/validateUrl.js'
@@ -28,6 +29,7 @@ interface Deps {
   outputDir: string
   schedulePersistence: SchedulePersistenceService
   stepVersionService: StepVersionPersistenceService
+  moduleService: ModulePersistenceService
 }
 
 export function createParsersRouter({
@@ -38,6 +40,7 @@ export function createParsersRouter({
   outputDir,
   schedulePersistence,
   stepVersionService,
+  moduleService,
 }: Deps) {
   const router = express.Router()
 
@@ -670,6 +673,80 @@ export function createParsersRouter({
     } finally {
       res.end()
     }
+  })
+
+  // ── Helper modules ─────────────────────────────────────────────────────────────
+
+  const PATH_RE = /^[A-Za-z_$][\w$]*$/
+
+  router.get('/:id/modules', async (_req, res) => {
+    const { id: parserId } = res.locals.parser as { id: string }
+    const rows = await moduleService.findByParserId(parserId)
+    res.json({ modules: rows.map(({ content: _c, ...rest }) => rest) })
+  })
+
+  router.post('/:id/modules', requireRole('admin'), async (req, res) => {
+    const { id: parserId } = res.locals.parser as { id: string }
+    const { path, content } = req.body as { path?: string; content?: string }
+    if (!path || !PATH_RE.test(path)) {
+      res.status(400).json({ error: 'path must be a valid identifier (no slashes, no extension)' })
+      return
+    }
+    try {
+      const module = await moduleService.create({ parserId, path, content })
+      res.status(201).json({ module })
+    } catch (err) {
+      if ((err as { code?: string }).code === '23505') {
+        res.status(409).json({ error: `File "${path}" already exists` })
+        return
+      }
+      throw err
+    }
+  })
+
+  router.get('/:id/modules/:fileId', async (req, res) => {
+    const { id: parserId } = res.locals.parser as { id: string }
+    const module = await moduleService.findById(req.params.fileId as string)
+    if (!module || module.parserId !== parserId) {
+      res.status(404).json({ error: 'File not found' })
+      return
+    }
+    res.json({ module })
+  })
+
+  router.put('/:id/modules/:fileId', requireRole('admin'), async (req, res) => {
+    const { id: parserId } = res.locals.parser as { id: string }
+    const existing = await moduleService.findById(req.params.fileId as string)
+    if (!existing || existing.parserId !== parserId) {
+      res.status(404).json({ error: 'File not found' })
+      return
+    }
+    const { path, content } = req.body as { path?: string; content?: string }
+    if (path !== undefined && !PATH_RE.test(path)) {
+      res.status(400).json({ error: 'path must be a valid identifier (no slashes, no extension)' })
+      return
+    }
+    try {
+      const module = await moduleService.update(req.params.fileId as string, { path, content })
+      res.json({ module })
+    } catch (err) {
+      if ((err as { code?: string }).code === '23505') {
+        res.status(409).json({ error: `File "${path}" already exists` })
+        return
+      }
+      throw err
+    }
+  })
+
+  router.delete('/:id/modules/:fileId', requireRole('admin'), async (req, res) => {
+    const { id: parserId } = res.locals.parser as { id: string }
+    const existing = await moduleService.findById(req.params.fileId as string)
+    if (!existing || existing.parserId !== parserId) {
+      res.status(404).json({ error: 'File not found' })
+      return
+    }
+    await moduleService.delete(req.params.fileId as string)
+    res.json({ ok: true })
   })
 
   return router
