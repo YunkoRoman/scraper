@@ -37,31 +37,39 @@ describe('DbParserLoader', () => {
     mockSelect
       .mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue([{
-          id: 'abc',
-          name: 'test',
-          entryUrl: 'https://example.com',
-          entryStep: 'crawl',
-          browserType: 'playwright',
-          browserSettings: {},
-          retryConfig: { maxRetries: 3 },
-          deduplication: true,
-          concurrentQuota: null,
-        }]),
+        where: vi.fn().mockResolvedValue([
+          {
+            id: 'abc',
+            name: 'test',
+            entryUrl: 'https://example.com',
+            entryStep: 'crawl',
+            browserType: 'playwright',
+            browserSettings: {},
+            retryConfig: { maxRetries: 3 },
+            deduplication: true,
+            concurrentQuota: null,
+          },
+        ]),
       })
       .mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        orderBy: vi.fn().mockResolvedValue([{
-          id: 'step1',
-          parserId: 'abc',
-          name: 'crawl',
-          type: 'traverser',
-          outputFile: null,
-          code: 'return [{ link: "https://a.com", page_type: "detail", parent_data: {} }]',
-          stepSettings: {},
-          position: 0,
-        }]),
+        orderBy: vi.fn().mockResolvedValue([
+          {
+            id: 'step1',
+            parserId: 'abc',
+            name: 'crawl',
+            type: 'traverser',
+            outputFile: null,
+            code: 'return [{ link: "https://a.com", page_type: "detail", parent_data: {} }]',
+            stepSettings: {},
+            position: 0,
+          },
+        ]),
+      })
+      .mockReturnValueOnce({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue([]),
       })
 
     const loader = new DbParserLoader()
@@ -72,7 +80,9 @@ describe('DbParserLoader', () => {
     expect(config.steps.size).toBe(1)
     const step = config.steps.get('crawl' as any)!
     expect(step.type).toBe('traverser')
-    expect(step.code).toBe('return [{ link: "https://a.com", page_type: "detail", parent_data: {} }]')
+    expect(step.code).toBe(
+      'return [{ link: "https://a.com", page_type: "detail", parent_data: {} }]',
+    )
     const result = await step.run({} as any, { url: 'https://a.com' } as any)
     expect(result).toEqual([{ link: 'https://a.com', page_type: 'detail', parent_data: {} }])
   })
@@ -81,20 +91,39 @@ describe('DbParserLoader', () => {
     mockSelect
       .mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue([{
-          id: 'abc', name: 'test', entryUrl: '', entryStep: 'extract',
-          browserType: 'playwright', browserSettings: {}, retryConfig: { maxRetries: 5 },
-          deduplication: true, concurrentQuota: null,
-        }]),
+        where: vi.fn().mockResolvedValue([
+          {
+            id: 'abc',
+            name: 'test',
+            entryUrl: '',
+            entryStep: 'extract',
+            browserType: 'playwright',
+            browserSettings: {},
+            retryConfig: { maxRetries: 5 },
+            deduplication: true,
+            concurrentQuota: null,
+          },
+        ]),
       })
       .mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        orderBy: vi.fn().mockResolvedValue([{
-          id: 'step2', parserId: 'abc', name: 'extract', type: 'extractor',
-          outputFile: 'data.csv', code: 'return [{ title: "test" }]',
-          stepSettings: {}, position: 0,
-        }]),
+        orderBy: vi.fn().mockResolvedValue([
+          {
+            id: 'step2',
+            parserId: 'abc',
+            name: 'extract',
+            type: 'extractor',
+            outputFile: 'data.csv',
+            code: 'return [{ title: "test" }]',
+            stepSettings: {},
+            position: 0,
+          },
+        ]),
+      })
+      .mockReturnValueOnce({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue([]),
       })
 
     const loader = new DbParserLoader()
