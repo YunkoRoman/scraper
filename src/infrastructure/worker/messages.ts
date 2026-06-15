@@ -26,6 +26,8 @@ export type WorkerData =
       outputFile?: string
       stepSettings?: StepSettings
       stepName: string
+      parserName?: string
+      helperFiles?: Array<{ path: string; content: string }>
       browserSettings?: BrowserSettings
       __workerPath?: string
     }
