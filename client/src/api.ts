@@ -314,6 +314,63 @@ export async function deleteStep(parserId: string, stepName: string): Promise<vo
   })
 }
 
+export interface ParserFileRow {
+  id: string
+  parserId: string
+  path: string
+  content: string
+  createdAt: string
+  updatedAt: string
+}
+
+export async function listModules(
+  parserId: string,
+): Promise<Array<Omit<ParserFileRow, 'content'>>> {
+  const data = await apiRequest<{ modules: Array<Omit<ParserFileRow, 'content'>> }>(
+    `/api/parsers/${parserId}/modules`,
+  )
+  return data.modules
+}
+
+export async function createModule(
+  parserId: string,
+  input: { path: string; content?: string },
+): Promise<ParserFileRow> {
+  const data = await apiRequest<{ module: ParserFileRow }>(`/api/parsers/${parserId}/modules`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  return data.module
+}
+
+export async function getModule(parserId: string, fileId: string): Promise<ParserFileRow> {
+  const data = await apiRequest<{ module: ParserFileRow }>(
+    `/api/parsers/${parserId}/modules/${fileId}`,
+  )
+  return data.module
+}
+
+export async function updateModule(
+  parserId: string,
+  fileId: string,
+  input: { path?: string; content?: string },
+): Promise<ParserFileRow> {
+  const data = await apiRequest<{ module: ParserFileRow }>(
+    `/api/parsers/${parserId}/modules/${fileId}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  )
+  return data.module
+}
+
+export async function deleteModule(parserId: string, fileId: string): Promise<void> {
+  await apiRequest(`/api/parsers/${parserId}/modules/${fileId}`, { method: 'DELETE' })
+}
+
 export interface RunInfo {
   id: string
   parserName: string
