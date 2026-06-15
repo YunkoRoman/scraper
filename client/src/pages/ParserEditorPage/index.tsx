@@ -45,6 +45,9 @@ export function ParserEditorPage() {
     selectedStep,
     selectedStepName,
     code,
+    modules,
+    selectedModuleId,
+    activeItemType,
     saveStatus,
     loading,
     error,
@@ -55,6 +58,9 @@ export function ParserEditorPage() {
     removeStep,
     saveParserSettings,
     saveStepMeta,
+    selectModule,
+    addModule,
+    removeModule,
   } = useParserEditor(parserId)
 
   const [newParserName, setNewParserName] = useState('')
@@ -75,6 +81,10 @@ export function ParserEditorPage() {
   const [showStepSettings, setShowStepSettings] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
 
+  const [addingModule, setAddingModule] = useState(false)
+  const [newModuleName, setNewModuleName] = useState('')
+  const [moduleNameError, setModuleNameError] = useState<string | null>(null)
+
   const saveStatusLabel =
     saveStatus === 'saving'
       ? 'Saving...'
@@ -83,6 +93,19 @@ export function ParserEditorPage() {
         : saveStatus === 'error'
           ? 'Save failed'
           : ''
+
+  async function confirmAddModule() {
+    const name = newModuleName.trim()
+    if (!name) return
+    if (!/^[A-Za-z_$][\w$]*$/.test(name)) {
+      setModuleNameError('Use a valid identifier: no slashes, no extension')
+      return
+    }
+    await addModule(name)
+    setAddingModule(false)
+    setNewModuleName('')
+    setModuleNameError(null)
+  }
 
   // New parser creation form
   if (!parserId) {
@@ -467,6 +490,76 @@ export function ParserEditorPage() {
               </motion.div>
             ))}
           </AnimatePresence>
+
+          {/* Files (helper modules) */}
+          <div className="mt-6">
+            <div className="flex items-center justify-between px-2 mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Files
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddingModule(true)
+                  setNewModuleName('')
+                  setModuleNameError(null)
+                }}
+                className="text-gray-400 hover:text-emerald-500"
+                title="New file"
+              >
+                +
+              </button>
+            </div>
+
+            {addingModule && (
+              <div className="px-2 mb-2">
+                <input
+                  autoFocus
+                  value={newModuleName}
+                  onChange={(e) => setNewModuleName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void confirmAddModule()
+                    if (e.key === 'Escape') {
+                      setAddingModule(false)
+                      setNewModuleName('')
+                      setModuleNameError(null)
+                    }
+                  }}
+                  placeholder="filename (e.g. validate)"
+                  className="w-full px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                />
+                {moduleNameError && <p className="mt-1 text-xs text-red-500">{moduleNameError}</p>}
+              </div>
+            )}
+
+            {modules.map((m) => {
+              const active = activeItemType === 'module' && selectedModuleId === m.id
+              return (
+                <div
+                  key={m.id}
+                  className={`group flex items-center justify-between px-2 py-1.5 rounded cursor-pointer text-sm ${
+                    active
+                      ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                  onClick={() => void selectModule(m.id)}
+                >
+                  <span className="truncate">{m.path}.ts</span>
+                  <button
+                    type="button"
+                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500"
+                    title="Delete file"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (window.confirm(`Delete file "${m.path}.ts"?`)) void removeModule(m.id)
+                    }}
+                  >
+                    🗑
+                  </button>
+                </div>
+              )
+            })}
+          </div>
         </div>
 
         {/* Editor panel */}
@@ -520,7 +613,9 @@ export function ParserEditorPage() {
                 )}
               </AnimatePresence>
               <div className="px-3 py-1.5 bg-blue-950/40 border-b border-blue-800/30 text-xs text-blue-300 flex items-center gap-2 flex-shrink-0 flex-wrap">
-                <span className="font-mono font-semibold text-blue-200">solveCF(url, options?)</span>
+                <span className="font-mono font-semibold text-blue-200">
+                  solveCF(url, options?)
+                </span>
                 <span className="text-blue-400">—</span>
                 <span>bypasses Cloudflare via FlareSolverr/Byparr — returns solution object.</span>
                 <code className="font-mono text-blue-200 bg-blue-900/40 px-1 rounded">
