@@ -13,7 +13,7 @@ import type { TraverserResult } from '../../domain/value-objects/TraverserResult
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (
   ...args: string[]
-) => (...a: any[]) => Promise<any>
+) => (...a: unknown[]) => Promise<unknown>
 
 export class DbParserLoader implements IParserLoader {
   async load(parserName: string): Promise<ParserConfig> {
@@ -43,6 +43,7 @@ export class DbParserLoader implements IParserLoader {
       } catch (err) {
         throw new Error(
           `Syntax error in step "${s.name}" of parser "${row.name}": ${(err as Error).message}`,
+          { cause: err },
         )
       }
       if (s.type === 'traverser') {

@@ -5,7 +5,7 @@ export type StepType = 'traverser' | 'extractor'
 
 // P is the browser Page type: import('playwright').Page by default,
 // or import('puppeteer').Page when settings.browser_type === 'puppeteer'.
-export abstract class Step<P = import('playwright').Page> {
+export abstract class Step<_P = import('playwright').Page> {
   abstract readonly type: StepType
   readonly outputFile?: string
   code?: string

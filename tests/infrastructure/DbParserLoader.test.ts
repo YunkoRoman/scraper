@@ -8,18 +8,9 @@ vi.mock('../../src/infrastructure/db/client.js', () => ({
 
 import { DbParserLoader } from '../../src/infrastructure/loader/DbParserLoader.js'
 import { db } from '../../src/infrastructure/db/client.js'
+import { stepName } from '../../src/domain/value-objects/StepName.js'
 
 const mockSelect = db.select as ReturnType<typeof vi.fn>
-
-function makeSelectChain(result: unknown[]) {
-  const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockResolvedValue(result),
-  }
-  mockSelect.mockReturnValue(chain)
-  return chain
-}
 
 describe('DbParserLoader', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -78,12 +69,13 @@ describe('DbParserLoader', () => {
     expect(config.name).toBe('test')
     expect(config.entryUrl).toBe('https://example.com')
     expect(config.steps.size).toBe(1)
-    const step = config.steps.get('crawl' as any)!
+    const step = config.steps.get(stepName('crawl'))!
     expect(step.type).toBe('traverser')
     expect(step.code).toBe(
       'return [{ link: "https://a.com", page_type: "detail", parent_data: {} }]',
     )
-    const result = await step.run({} as any, { url: 'https://a.com' } as any)
+    const runnable = step as unknown as { run: (p: unknown, t: unknown) => Promise<unknown> }
+    const result = await runnable.run({}, { url: 'https://a.com' })
     expect(result).toEqual([{ link: 'https://a.com', page_type: 'detail', parent_data: {} }])
   })
 
@@ -128,7 +120,7 @@ describe('DbParserLoader', () => {
 
     const loader = new DbParserLoader()
     const config = await loader.load('test')
-    const step = config.steps.get('extract' as any)! as any
+    const step = config.steps.get(stepName('extract'))!
     expect(step.type).toBe('extractor')
     expect(step.outputFile).toBe('data.csv')
   })

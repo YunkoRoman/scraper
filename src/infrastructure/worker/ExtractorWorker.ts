@@ -1,7 +1,7 @@
 // src/infrastructure/worker/ExtractorWorker.ts
 import { parentPort, workerData } from 'node:worker_threads'
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import type { WorkerInMessage, WorkerOutMessage, WorkerData } from './messages.js'
 import { pipeConsole } from './pipeConsole.js'
 import { mergeWorkerSettings } from './mergeWorkerSettings.js'
@@ -22,7 +22,7 @@ pipeConsole(data.stepName)
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (
   ...args: string[]
-) => (...a: any[]) => Promise<any>
+) => (...a: unknown[]) => Promise<unknown>
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let adapter: BrowserAdapter<any> = createBrowserAdapter()

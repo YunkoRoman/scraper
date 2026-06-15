@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { listParsersSummary, startParser, stopParser, resumeParser, rerunParser, importParser, type ParserSummary } from '../api'
+import {
+  listParsersSummary,
+  startParser,
+  stopParser,
+  rerunParser,
+  importParser,
+  type ParserSummary,
+} from '../api'
 import { useSettings } from '../hooks/useSettings'
 import { StatusDot } from '../components/motion/StatusDot'
 import { SpringButton } from '../components/motion/SpringButton'
@@ -11,27 +18,49 @@ type SortDir = 'asc' | 'desc'
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
 }
 
 function SuccessRateCell({ rate }: { rate: number | null }) {
   if (rate === null) return <span className="text-gray-400 dark:text-gray-600">—</span>
   const cls =
-    rate >= 90 ? 'text-emerald-600 dark:text-emerald-400'
-    : rate >= 70 ? 'text-amber-600 dark:text-amber-400'
-    : 'text-red-600 dark:text-red-400'
+    rate >= 90
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : rate >= 70
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-red-600 dark:text-red-400'
   return <span className={cls}>{rate}%</span>
 }
 
 function ChevronIcon({ dir }: { dir: SortDir }) {
-  return dir === 'asc'
-    ? <svg className="w-3 h-3 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
-    : <svg className="w-3 h-3 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+  return dir === 'asc' ? (
+    <svg className="w-3 h-3 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+    </svg>
+  ) : (
+    <svg className="w-3 h-3 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    </svg>
+  )
 }
 
 function SortableHeader({
-  col: _col, label, active, dir, onClick,
-}: { col: SortCol; label: string; active: boolean; dir: SortDir; onClick: () => void }) {
+  col: _col,
+  label,
+  active,
+  dir,
+  onClick,
+}: {
+  col: SortCol
+  label: string
+  active: boolean
+  dir: SortDir
+  onClick: () => void
+}) {
   return (
     <th
       className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
@@ -81,10 +110,14 @@ export function ParsersPage() {
     }
   }, [page, limit, debouncedSearch, statusFilter, sort, dir])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    fetchData() // eslint-disable-line react-hooks/set-state-in-effect
+  }, [fetchData])
 
   useEffect(() => {
-    const interval = setInterval(() => { fetchData() }, 5000)
+    const interval = setInterval(() => {
+      fetchData()
+    }, 5000)
     return () => clearInterval(interval)
   }, [fetchData])
 
@@ -94,12 +127,17 @@ export function ParsersPage() {
       setDebouncedSearch(search)
       setPage(1)
     }, 300)
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
   }, [search])
 
   function handleSort(col: SortCol) {
-    if (sort === col) setDir((d) => d === 'asc' ? 'desc' : 'asc')
-    else { setSort(col); setDir('asc') }
+    if (sort === col) setDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else {
+      setSort(col)
+      setDir('asc')
+    }
     setPage(1)
   }
 
@@ -110,35 +148,43 @@ export function ParsersPage() {
 
   async function handleRun(id: string) {
     setRowLoading((prev) => ({ ...prev, [id]: true }))
-    try { await startParser(id); await fetchData() }
-    catch { /* error visible on next poll */ }
-    finally { setRowLoading((prev) => ({ ...prev, [id]: false })) }
+    try {
+      await startParser(id)
+      await fetchData()
+    } catch {
+      /* error visible on next poll */
+    } finally {
+      setRowLoading((prev) => ({ ...prev, [id]: false }))
+    }
   }
 
   async function handleStop(id: string) {
     setRowLoading((prev) => ({ ...prev, [id]: true }))
-    try { await stopParser(id); await fetchData() }
-    catch { /* ignore */ }
-    finally { setRowLoading((prev) => ({ ...prev, [id]: false })) }
-  }
-
-  async function handleResume(id: string) {
-    setRowLoading((prev) => ({ ...prev, [id]: true }))
-    try { await resumeParser(id); await fetchData() }
-    catch { /* ignore */ }
-    finally { setRowLoading((prev) => ({ ...prev, [id]: false })) }
+    try {
+      await stopParser(id)
+      await fetchData()
+    } catch {
+      /* ignore */
+    } finally {
+      setRowLoading((prev) => ({ ...prev, [id]: false }))
+    }
   }
 
   async function handleRerun(id: string) {
     setRowLoading((prev) => ({ ...prev, [id]: true }))
-    try { await rerunParser(id); await fetchData() }
-    catch { /* error visible on next poll */ }
-    finally { setRowLoading((prev) => ({ ...prev, [id]: false })) }
+    try {
+      await rerunParser(id)
+      await fetchData()
+    } catch {
+      /* error visible on next poll */
+    } finally {
+      setRowLoading((prev) => ({ ...prev, [id]: false }))
+    }
   }
 
   const totalPages = Math.ceil(total / limit)
   const fromItem = total === 0 ? 0 : (page - 1) * limit + 1
-  const toItem   = Math.min(page * limit, total)
+  const toItem = Math.min(page * limit, total)
 
   return (
     <div className="px-6 py-6">
@@ -151,8 +197,18 @@ export function ParsersPage() {
         <div className="flex items-center gap-2 flex-1 justify-center max-w-lg">
           {/* Search */}
           <div className="relative flex-1">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
             </svg>
             <input
               type="text"
@@ -215,7 +271,9 @@ export function ParsersPage() {
       {error && (
         <div className="mb-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg px-4 py-3 text-sm text-red-600 dark:text-red-400">
           {error}
-          <button onClick={fetchData} className="ml-3 underline">Retry</button>
+          <button onClick={fetchData} className="ml-3 underline">
+            Retry
+          </button>
         </div>
       )}
 
@@ -224,23 +282,49 @@ export function ParsersPage() {
         <table className="w-full">
           <thead className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-28">Status</th>
-              <SortableHeader col="name"          label="Name"          active={sort === 'name'}          dir={dir} onClick={() => handleSort('name')} />
-              <SortableHeader col="successRate"   label="Success Rate"  active={sort === 'successRate'}   dir={dir} onClick={() => handleSort('successRate')} />
-              <SortableHeader col="lastRunDate"   label="Last Run Date" active={sort === 'lastRunDate'}   dir={dir} onClick={() => handleSort('lastRunDate')} />
-              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-28">
+                Status
+              </th>
+              <SortableHeader
+                col="name"
+                label="Name"
+                active={sort === 'name'}
+                dir={dir}
+                onClick={() => handleSort('name')}
+              />
+              <SortableHeader
+                col="successRate"
+                label="Success Rate"
+                active={sort === 'successRate'}
+                dir={dir}
+                onClick={() => handleSort('successRate')}
+              />
+              <SortableHeader
+                col="lastRunDate"
+                label="Last Run Date"
+                active={sort === 'lastRunDate'}
+                dir={dir}
+                onClick={() => handleSort('lastRunDate')}
+              />
+              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
             {loading && data.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-sm text-gray-400">Loading…</td>
+                <td colSpan={5} className="px-4 py-10 text-center text-sm text-gray-400">
+                  Loading…
+                </td>
               </tr>
             )}
             {!loading && data.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-10 text-center text-sm text-gray-400">
-                  {search || statusFilter !== 'all' ? 'No parsers match this filter.' : 'No parsers yet.'}
+                  {search || statusFilter !== 'all'
+                    ? 'No parsers match this filter.'
+                    : 'No parsers yet.'}
                 </td>
               </tr>
             )}
@@ -248,11 +332,16 @@ export function ParsersPage() {
               const statusConfig = PARSER_STATUS[parser.status] ?? UNKNOWN_STATUS
               const busy = rowLoading[parser.id] ?? false
               return (
-                <tr key={parser.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                <tr
+                  key={parser.id}
+                  className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+                >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <StatusDot dotClass={statusConfig.dot} pulse={statusConfig.pulse} />
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusConfig.badge}`}>
+                      <span
+                        className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusConfig.badge}`}
+                      >
                         {statusConfig.label}
                       </span>
                     </div>
@@ -275,19 +364,39 @@ export function ParsersPage() {
                     <div className="flex items-center justify-end gap-2">
                       {parser.status === 'running' ? (
                         <>
-                          <SpringButton variant="danger" onClick={() => handleStop(parser.id)} loading={busy} className="text-xs py-1 px-3">
+                          <SpringButton
+                            variant="danger"
+                            onClick={() => handleStop(parser.id)}
+                            loading={busy}
+                            className="text-xs py-1 px-3"
+                          >
                             Stop
                           </SpringButton>
-                          <SpringButton variant="warning" onClick={() => handleRerun(parser.id)} loading={busy} className="text-xs py-1 px-3">
+                          <SpringButton
+                            variant="warning"
+                            onClick={() => handleRerun(parser.id)}
+                            loading={busy}
+                            className="text-xs py-1 px-3"
+                          >
                             Rerun
                           </SpringButton>
                         </>
                       ) : parser.status === 'stopped' ? (
-                        <SpringButton variant="success" onClick={() => handleRun(parser.id)} loading={busy} className="text-xs py-1 px-3">
+                        <SpringButton
+                          variant="success"
+                          onClick={() => handleRun(parser.id)}
+                          loading={busy}
+                          className="text-xs py-1 px-3"
+                        >
                           Run
                         </SpringButton>
                       ) : (
-                        <SpringButton variant="success" onClick={() => handleRun(parser.id)} loading={busy} className="text-xs py-1 px-3">
+                        <SpringButton
+                          variant="success"
+                          onClick={() => handleRun(parser.id)}
+                          loading={busy}
+                          className="text-xs py-1 px-3"
+                        >
                           Run
                         </SpringButton>
                       )}
@@ -318,7 +427,14 @@ export function ParsersPage() {
               disabled={page === 1}
               className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
             </button>
             {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
               const p = i + 1
@@ -342,7 +458,14 @@ export function ParsersPage() {
               disabled={page === totalPages}
               className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
             </button>
           </div>
         </div>

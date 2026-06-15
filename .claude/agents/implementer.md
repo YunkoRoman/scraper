@@ -60,9 +60,15 @@ Never guess at code structure. Never redesign on the fly. Delegate to the right 
 - Format: new `NNN-short-slug.md` + append row to `design-log/index.md`
 - Not required for: bug fixes, style changes, renames without behavior change
 
-## After implementation — mandatory reviews
+## After implementation — mandatory checks
 
-Once all edits are complete, spawn the relevant reviewers in parallel against the changed files. Always run at minimum `ddd-boundary-reviewer`. Add the others based on what changed:
+### 1. Run the linter
+
+After all edits are complete, run `npm run lint` from the project root. Fix any errors before proceeding. Warnings are acceptable only if they are pre-existing and unrelated to the current changes.
+
+### 2. Run the relevant reviewers
+
+Once lint is clean, spawn the relevant reviewers in parallel against the changed files. Always run at minimum `ddd-boundary-reviewer`. Add the others based on what changed:
 
 | Reviewer | Spawn when… |
 |---|---|

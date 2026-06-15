@@ -12,9 +12,14 @@ function parseCsvRow(line: string): string[] {
   let current = ''
   let inQuote = false
   for (const char of line) {
-    if (char === '"') { inQuote = !inQuote }
-    else if (char === ',' && !inQuote) { result.push(current); current = '' }
-    else { current += char }
+    if (char === '"') {
+      inQuote = !inQuote
+    } else if (char === ',' && !inQuote) {
+      result.push(current)
+      current = ''
+    } else {
+      current += char
+    }
   }
   result.push(current)
   return result
@@ -30,18 +35,40 @@ function parseCsv(text: string): { headers: string[]; rows: string[][] } {
     const ch = text[i]
     const next = text[i + 1]
     if (inQuote) {
-      if (ch === '"' && next === '"') { current += '"'; i++ }
-      else if (ch === '"') { inQuote = false }
-      else { current += ch }
+      if (ch === '"' && next === '"') {
+        current += '"'
+        i++
+      } else if (ch === '"') {
+        inQuote = false
+      } else {
+        current += ch
+      }
     } else {
-      if (ch === '"') { inQuote = true }
-      else if (ch === ',') { row.push(current); current = '' }
-      else if (ch === '\r' && next === '\n') { row.push(current); current = ''; allRows.push(row); row = []; i++ }
-      else if (ch === '\n') { row.push(current); current = ''; allRows.push(row); row = [] }
-      else { current += ch }
+      if (ch === '"') {
+        inQuote = true
+      } else if (ch === ',') {
+        row.push(current)
+        current = ''
+      } else if (ch === '\r' && next === '\n') {
+        row.push(current)
+        current = ''
+        allRows.push(row)
+        row = []
+        i++
+      } else if (ch === '\n') {
+        row.push(current)
+        current = ''
+        allRows.push(row)
+        row = []
+      } else {
+        current += ch
+      }
     }
   }
-  if (current || row.length > 0) { row.push(current); allRows.push(row) }
+  if (current || row.length > 0) {
+    row.push(current)
+    allRows.push(row)
+  }
 
   if (allRows.length === 0) return { headers: [], rows: [] }
   const headers = allRows[0]
@@ -83,16 +110,19 @@ describe('parseCsv', () => {
     expect(rows).toEqual([['Foo', 'Bar']])
   })
   it('keeps newlines inside quoted fields as one value', () => {
-    const { headers, rows } = parseCsv('title,desc\nFoo,"line one\nline two"')
+    const { rows } = parseCsv('title,desc\nFoo,"line one\nline two"')
     expect(rows[0][1]).toBe('line one\nline two')
   })
   it('handles CRLF line endings', () => {
     const { headers, rows } = parseCsv('a,b\r\n1,2\r\n3,4')
     expect(headers).toEqual(['a', 'b'])
-    expect(rows).toEqual([['1', '2'], ['3', '4']])
+    expect(rows).toEqual([
+      ['1', '2'],
+      ['3', '4'],
+    ])
   })
   it('handles escaped double-quotes inside quoted fields', () => {
-    const { headers, rows } = parseCsv('a,b\n"""quoted""",plain')
+    const { rows } = parseCsv('a,b\n"""quoted""",plain')
     expect(rows[0][0]).toBe('"quoted"')
   })
 })

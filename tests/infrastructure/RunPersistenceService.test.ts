@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest'
 import { RunPersistenceService } from '../../src/infrastructure/db/RunPersistenceService.js'
 import { pool } from '../../src/infrastructure/db/client.js'
 import { PageState } from '../../src/domain/value-objects/PageState.js'
+import { stepName } from '../../src/domain/value-objects/StepName.js'
 import { randomUUID } from 'node:crypto'
 
 const svc = new RunPersistenceService()
@@ -25,7 +26,7 @@ describe('RunPersistenceService', () => {
     const task = {
       id: randomUUID(),
       url: 'https://example.com',
-      stepName: 'extract' as any,
+      stepName: stepName('extract'),
       stepType: 'extractor' as const,
       state: PageState.Success,
       attempts: 1,
@@ -36,7 +37,7 @@ describe('RunPersistenceService', () => {
     }
     await svc.upsertTask(runId, task)
     const { tasks } = await svc.getRunTasks(runId, 1, 100)
-    expect(tasks.some(t => t.id === task.id)).toBe(true)
+    expect(tasks.some((t) => t.id === task.id)).toBe(true)
   })
 
   it('marks run as stopped', async () => {
