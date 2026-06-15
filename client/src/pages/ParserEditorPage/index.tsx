@@ -612,24 +612,7 @@ export function ParserEditorPage() {
                   />
                 )}
               </AnimatePresence>
-              <div className="px-3 py-1.5 bg-blue-950/40 border-b border-blue-800/30 text-xs text-blue-300 flex items-center gap-2 flex-shrink-0 flex-wrap">
-                <span className="font-mono font-semibold text-blue-200">
-                  solveCF(url, options?)
-                </span>
-                <span className="text-blue-400">—</span>
-                <span>bypasses Cloudflare via FlareSolverr/Byparr — returns solution object.</span>
-                <code className="font-mono text-blue-200 bg-blue-900/40 px-1 rounded">
-                  {'const { response } = await solveCF(task.url); await page.setContent(response);'}
-                </code>
-                <a
-                  href="https://github.com/FlareSolverr/FlareSolverr"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-auto text-blue-500 hover:text-blue-300 transition-colors whitespace-nowrap"
-                >
-                  Setup ↗
-                </a>
-              </div>
+
               <div className="relative flex flex-1 overflow-hidden min-h-0">
                 <div className="flex-1 overflow-hidden min-w-0">
                   <Editor
