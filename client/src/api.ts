@@ -14,6 +14,7 @@ export interface RunStats {
   inProgress: number
   traversers: StepTypeStats
   extractors: StepTypeStats
+  totalItems: number
 }
 
 export interface StepStat {
@@ -398,6 +399,7 @@ export interface TaskRow {
   error?: string | null
   parentTaskId?: string | null
   parent_data?: Record<string, unknown> | null
+  itemCount: number | null
 }
 
 export async function listJobs(
