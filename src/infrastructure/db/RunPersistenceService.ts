@@ -322,23 +322,27 @@ export class RunPersistenceService extends BasePersistenceService<
 
     const extractorIds = taskIds.filter((id) => stepTypes.get(id) === 'extractor')
     if (extractorIds.length > 0) {
-      const rows = await this.db.execute<{ task_id: string; cnt: number }>(sql`
-        SELECT task_id, COALESCE(jsonb_array_length(rows), 0) AS cnt
-        FROM task_results
-        WHERE task_id = ANY(${extractorIds}::uuid[])
-      `)
-      for (const r of rows.rows) result.set(r.task_id, r.cnt)
+      const rows = await this.db
+        .select({
+          taskId: taskResults.taskId,
+          cnt: sql<number>`COALESCE(jsonb_array_length(${taskResults.rows}), 0)`,
+        })
+        .from(taskResults)
+        .where(inArray(taskResults.taskId, extractorIds))
+      for (const r of rows) result.set(r.taskId, r.cnt)
     }
 
     const traverserIds = taskIds.filter((id) => stepTypes.get(id) === 'traverser')
     if (traverserIds.length > 0) {
-      const rows = await this.db.execute<{ parent_task_id: string; cnt: number }>(sql`
-        SELECT parent_task_id, COUNT(*)::int AS cnt
-        FROM run_tasks
-        WHERE parent_task_id = ANY(${traverserIds}::uuid[])
-        GROUP BY parent_task_id
-      `)
-      for (const r of rows.rows) result.set(r.parent_task_id, r.cnt)
+      const rows = await this.db
+        .select({
+          parentTaskId: runTasks.parentTaskId,
+          cnt: sql<number>`count(*)::int`,
+        })
+        .from(runTasks)
+        .where(inArray(runTasks.parentTaskId, traverserIds))
+        .groupBy(runTasks.parentTaskId)
+      for (const r of rows) if (r.parentTaskId) result.set(r.parentTaskId, r.cnt)
     }
 
     return result
