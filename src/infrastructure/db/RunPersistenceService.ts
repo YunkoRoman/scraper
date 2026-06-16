@@ -43,6 +43,7 @@ export interface StoredTask {
   error?: string | null
   parentTaskId?: string | null
   parent_data?: Record<string, unknown> | null
+  itemCount: number | null
 }
 
 export interface CreateRunInput {
@@ -190,13 +191,14 @@ export class RunPersistenceService extends BasePersistenceService<
         error: buffered.error ?? null,
         parentTaskId: buffered.parentTaskId ?? null,
         parent_data: buffered.parent_data ?? null,
+        itemCount: null,
       }
     }
     const [row] = await this.db
       .select()
       .from(runTasks)
       .where(and(eq(runTasks.id, taskId), eq(runTasks.runId, runId)))
-    return row ? (row as StoredTask) : null
+    return row ? (row as unknown as StoredTask) : null
   }
 
   // ── Run queries ───────────────────────────────────────────────────────────
@@ -290,7 +292,7 @@ export class RunPersistenceService extends BasePersistenceService<
       .select({ count: sql<number>`count(*)::int` })
       .from(runTasks)
       .where(conditions)
-    return { tasks: rows as StoredTask[], total: count }
+    return { tasks: rows as unknown as StoredTask[], total: count }
   }
 
   async getStepStats(
@@ -306,6 +308,37 @@ export class RunPersistenceService extends BasePersistenceService<
       .from(runTasks)
       .where(eq(runTasks.runId, runId))
       .groupBy(runTasks.stepName)
+  }
+
+  async getTaskItemCounts(
+    taskIds: string[],
+    stepTypes: Map<string, 'traverser' | 'extractor'>,
+  ): Promise<Map<string, number>> {
+    if (taskIds.length === 0) return new Map()
+    const result = new Map<string, number>()
+
+    const extractorIds = taskIds.filter((id) => stepTypes.get(id) === 'extractor')
+    if (extractorIds.length > 0) {
+      const rows = await this.db.execute<{ task_id: string; cnt: number }>(sql`
+        SELECT task_id, COALESCE(jsonb_array_length(rows), 0) AS cnt
+        FROM task_results
+        WHERE task_id = ANY(${extractorIds}::uuid[])
+      `)
+      for (const r of rows.rows) result.set(r.task_id, r.cnt)
+    }
+
+    const traverserIds = taskIds.filter((id) => stepTypes.get(id) === 'traverser')
+    if (traverserIds.length > 0) {
+      const rows = await this.db.execute<{ parent_task_id: string; cnt: number }>(sql`
+        SELECT parent_task_id, COUNT(*)::int AS cnt
+        FROM run_tasks
+        WHERE parent_task_id = ANY(${traverserIds}::uuid[])
+        GROUP BY parent_task_id
+      `)
+      for (const r of rows.rows) result.set(r.parent_task_id, r.cnt)
+    }
+
+    return result
   }
 
   async loadLatestStoppedRunTasks(
@@ -505,11 +538,22 @@ export class RunPersistenceService extends BasePersistenceService<
       .from(runTasks)
       .where(eq(runTasks.runId, runId))
       .groupBy(runTasks.runId, runTasks.state, runTasks.stepType)
-    return this._computeStatsFromRows(rows)
+
+    const itemResult = await this.db.execute<{ total: number }>(sql`
+      SELECT COALESCE(SUM(jsonb_array_length(tr.rows)), 0)::int AS total
+      FROM run_tasks rt
+      JOIN task_results tr ON tr.task_id = rt.id
+      WHERE rt.run_id = ${runId}
+        AND rt.step_type = 'extractor'
+    `)
+    const totalItems = itemResult.rows[0]?.total ?? 0
+
+    return this._computeStatsFromRows(rows, totalItems)
   }
 
   private _computeStatsFromRows(
     rows: { state: string; stepType: string; count: number }[],
+    totalItems = 0,
   ): RunStats | null {
     if (rows.length === 0) return null
     const total = rows.reduce((s, r) => s + r.count, 0)
@@ -537,7 +581,7 @@ export class RunPersistenceService extends BasePersistenceService<
         success: getType('extractor', 'success'),
         failed: getType('extractor', 'failed'),
       },
-      totalItems: 0,
+      totalItems,
     }
   }
 }
