@@ -198,7 +198,7 @@ export class RunPersistenceService extends BasePersistenceService<
       .select()
       .from(runTasks)
       .where(and(eq(runTasks.id, taskId), eq(runTasks.runId, runId)))
-    return row ? (row as unknown as StoredTask) : null
+    return row ? { ...(row as unknown as StoredTask), itemCount: null } : null
   }
 
   // ── Run queries ───────────────────────────────────────────────────────────
@@ -292,7 +292,10 @@ export class RunPersistenceService extends BasePersistenceService<
       .select({ count: sql<number>`count(*)::int` })
       .from(runTasks)
       .where(conditions)
-    return { tasks: rows as unknown as StoredTask[], total: count }
+    return {
+      tasks: rows.map((r) => ({ ...(r as unknown as StoredTask), itemCount: null })),
+      total: count,
+    }
   }
 
   async getStepStats(
