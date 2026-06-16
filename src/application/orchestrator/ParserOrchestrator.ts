@@ -40,6 +40,8 @@ export class ParserOrchestrator extends EventEmitter {
   private taskHtml = new Map<string, string>()
   private activeTaskIds = new Set<string>()
   private retryingTasks = new Set<string>()
+  private extractorItemCounts = new Map<string, number>()
+  private traverserItemCounts = new Map<string, number>()
 
   constructor(
     private readonly config: ParserConfig,
@@ -178,7 +180,17 @@ export class ParserOrchestrator extends EventEmitter {
   }
 
   async getStats(): Promise<RunStats> {
-    return this.store.getStats()
+    const stats = await this.store.getStats()
+    let totalItems = 0
+    for (const count of this.extractorItemCounts.values()) totalItems += count
+    return { ...stats, totalItems }
+  }
+
+  getItemCounts(): Map<string, number> {
+    const result = new Map<string, number>()
+    for (const [id, count] of this.extractorItemCounts) result.set(id, count)
+    for (const [id, count] of this.traverserItemCounts) result.set(id, count)
+    return result
   }
 
   private spawnWorker(step: Step): void {
@@ -291,11 +303,14 @@ export class ParserOrchestrator extends EventEmitter {
           )
           await this.dispatchTask(task.id)
         }
+        const prev = this.traverserItemCounts.get(msg.taskId) ?? 0
+        this.traverserItemCounts.set(msg.taskId, prev + validItems.length)
         this.emit('stats', await this.store.getStats())
         break
       }
       case 'DATA_EXTRACTED': {
         for (const row of msg.rows) this.writeOutputRow(msg.outputFile, row)
+        this.extractorItemCounts.set(msg.taskId, msg.rows.length)
         const task = await this.store.getTask(msg.taskId)
         this.emit('data_extracted', { taskId: msg.taskId, rows: msg.rows, task })
         break
