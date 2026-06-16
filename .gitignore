@@ -32,3 +32,5 @@ pnpm-debug.log*
 # Tooling
 # .claude/ is tracked (shared agents/skills/hooks); only local overrides are ignored
 .claude/settings.local.json
+
+.playwright-mcp

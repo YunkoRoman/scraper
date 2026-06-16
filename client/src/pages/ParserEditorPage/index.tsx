@@ -54,7 +54,6 @@ export function ParserEditorPage() {
     error,
     selectStep,
     handleCodeChange,
-    saveNow,
     saveVersion,
     addStep,
     removeStep,

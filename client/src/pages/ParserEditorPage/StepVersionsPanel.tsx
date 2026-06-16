@@ -19,7 +19,7 @@ export function StepVersionsPanel({ parserId, stepName, refreshKey, onRestored, 
   const [tab, setTab] = useState<Tab>('versions')
 
   useEffect(() => {
-    setLoading(true)
+    setLoading(true) // eslint-disable-line react-hooks/set-state-in-effect
     listStepVersions(parserId, stepName)
       .then((v) => {
         setVersions(v)
