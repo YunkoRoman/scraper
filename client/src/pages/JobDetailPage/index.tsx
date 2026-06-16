@@ -197,7 +197,7 @@ export function JobDetailPage() {
                   <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
                   <div className="text-center">
                     <p className="text-xs text-gray-500">Total Items:</p>
-                    <p className="text-lg font-bold text-indigo-600 leading-tight">
+                    <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400 leading-tight">
                       {stats.totalItems}
                     </p>
                   </div>
