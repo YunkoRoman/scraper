@@ -140,7 +140,7 @@ export class ParserOrchestrator extends EventEmitter {
       }
     }
 
-    this.emit('stats', await this.store.getStats())
+    this.emit('stats', await this.getStats())
     return this.completionPromise
   }
 
@@ -275,7 +275,7 @@ export class ParserOrchestrator extends EventEmitter {
             this.emit('task_done', failed)
           }
         }
-        this.emit('stats', await this.store.getStats())
+        this.emit('stats', await this.getStats())
         await this.flushDispatchQueue()
         this.checkCompletion()
       })()
@@ -305,7 +305,7 @@ export class ParserOrchestrator extends EventEmitter {
         }
         const prev = this.traverserItemCounts.get(msg.taskId) ?? 0
         this.traverserItemCounts.set(msg.taskId, prev + validItems.length)
-        this.emit('stats', await this.store.getStats())
+        this.emit('stats', await this.getStats())
         break
       }
       case 'DATA_EXTRACTED': {
@@ -327,7 +327,7 @@ export class ParserOrchestrator extends EventEmitter {
         }
         const updated = await this.store.markSuccess(msg.taskId)
         this.emit('task_done', updated)
-        this.emit('stats', await this.store.getStats())
+        this.emit('stats', await this.getStats())
         await this.flushDispatchQueue()
         this.checkCompletion()
         break
@@ -352,7 +352,7 @@ export class ParserOrchestrator extends EventEmitter {
         }
         if (task.attempts < task.maxAttempts) {
           await this.store.markRetry(msg.taskId, msg.error)
-          this.emit('stats', await this.store.getStats())
+          this.emit('stats', await this.getStats())
           await this.dispatchTask(msg.taskId)
         } else {
           const updated = await this.store.markFailed(msg.taskId, msg.error)
@@ -362,7 +362,7 @@ export class ParserOrchestrator extends EventEmitter {
             this.taskHtml.delete(msg.taskId)
           }
           this.emit('task_done', updated)
-          this.emit('stats', await this.store.getStats())
+          this.emit('stats', await this.getStats())
           this.checkCompletion()
         }
         await this.flushDispatchQueue()
@@ -410,7 +410,7 @@ export class ParserOrchestrator extends EventEmitter {
       this.activeTaskIds.delete(taskId)
       const failed = await this.store.markFailed(taskId, `No worker for step "${task.stepName}"`)
       this.emit('task_done', failed)
-      this.emit('stats', await this.store.getStats())
+      this.emit('stats', await this.getStats())
       this.checkCompletion()
       return
     }
@@ -451,7 +451,7 @@ export class ParserOrchestrator extends EventEmitter {
       try {
         await this.closeAllWriters()
         await this.runPostProcessing()
-        this.emit('complete', await this.store.getStats())
+        this.emit('complete', await this.getStats())
         this.resolveCompletion()
       } catch (err) {
         this.emit('error', err)
