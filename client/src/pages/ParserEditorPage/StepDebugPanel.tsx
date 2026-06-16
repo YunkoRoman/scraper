@@ -13,32 +13,34 @@ function parseJsonSafe(s: string): Record<string, unknown> | undefined {
   try {
     const v = JSON.parse(s)
     if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return undefined
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const LogLine = ({ line }: { line: any }) => {
   const content = line.args.join(' ')
-  
+
   // Try to parse the log line as JSON
   let jsonData = null
   try {
     if (content.startsWith('[browser:debug] ')) {
-        jsonData = JSON.parse(content.replace('[browser:debug] ', ''))
+      jsonData = JSON.parse(content.replace('[browser:debug] ', ''))
     }
-  // eslint-disable-next-line no-empty
+    // eslint-disable-next-line no-empty
   } catch {}
 
   return (
     <div className={line.level === 'error' ? 'text-red-400' : 'text-gray-300'}>
       <span className="text-emerald-500 mr-1">[{line.stepName}]</span>
       {jsonData ? (
-        <ReactJson 
-          src={jsonData} 
-          theme="monokai" 
-          collapsed={1} 
-          displayDataTypes={false} 
+        <ReactJson
+          src={jsonData}
+          theme="monokai"
+          collapsed={1}
+          displayDataTypes={false}
           enableClipboard={false}
           style={{ backgroundColor: 'transparent', fontSize: '12px' }}
         />
@@ -78,16 +80,22 @@ export function StepDebugPanel({ parserId, stepName, initialUrl, onClose }: Prop
     }
   }, [logs])
 
-  const parentDataError = parentDataJson.trim() !== '' && parseJsonSafe(parentDataJson) === undefined
+  const parentDataError =
+    parentDataJson.trim() !== '' && parseJsonSafe(parentDataJson) === undefined
   const canRun = !isRunning && !!url.trim() && !parentDataError
 
   return (
     <div className="w-80 xl:w-96 h-full border-l border-gray-200 dark:border-gray-800 flex flex-col bg-white dark:bg-gray-900">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-800 shrink-0">
-        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Run: {stepName}</span>
+        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+          Run: {stepName}
+        </span>
         <button
-          onClick={() => { reset(); onClose() }}
+          onClick={() => {
+            reset()
+            onClose()
+          }}
           className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-lg leading-none"
           title="Close"
         >
@@ -134,7 +142,7 @@ export function StepDebugPanel({ parserId, stepName, initialUrl, onClose }: Prop
           >
             {isRunning ? 'Running…' : '▶ Run'}
           </SpringButton>
-          {(status !== 'idle') && (
+          {status !== 'idle' && (
             <button
               onClick={reset}
               disabled={isRunning}
@@ -184,16 +192,16 @@ export function StepDebugPanel({ parserId, stepName, initialUrl, onClose }: Prop
                 {JSON.stringify(result.items, null, 2)}
               </pre>
             </>
-          ) : (
+          ) : result.type === 'data' ? (
             <>
               <p className="text-xs text-gray-400 mb-1.5 font-medium">
-                {result.outputFile} — {result.rows.length} rows
+                {result.outputFile} — {result.rows?.length ?? 0} rows
               </p>
               <pre className="text-xs text-emerald-400 whitespace-pre-wrap break-all">
                 {JSON.stringify(result.rows, null, 2)}
               </pre>
             </>
-          )}
+          ) : null}
         </div>
       )}
     </div>
