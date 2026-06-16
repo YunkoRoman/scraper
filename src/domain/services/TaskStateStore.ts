@@ -107,6 +107,7 @@ export class InMemoryTaskStateStore implements TaskStateStore {
       inProgress: tasks.filter((t) => t.state === PageState.InProgress).length,
       traversers: byType('traverser'),
       extractors: byType('extractor'),
+      totalItems: 0,
     }
   }
 

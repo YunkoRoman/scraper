@@ -537,6 +537,7 @@ export class RunPersistenceService extends BasePersistenceService<
         success: getType('extractor', 'success'),
         failed: getType('extractor', 'failed'),
       },
+      totalItems: 0,
     }
   }
 }

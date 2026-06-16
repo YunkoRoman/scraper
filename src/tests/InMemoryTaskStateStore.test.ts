@@ -42,5 +42,6 @@ describe('InMemoryTaskStateStore', () => {
     expect(stats.failed).toBe(1)
     expect(stats.traversers.success).toBe(1)
     expect(stats.extractors.failed).toBe(1)
+    expect(stats.totalItems).toBe(0)
   })
 })

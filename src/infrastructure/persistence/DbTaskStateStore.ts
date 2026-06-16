@@ -23,6 +23,7 @@ function emptyStats(): RunStats {
     inProgress: 0,
     traversers: { total: 0, success: 0, failed: 0 },
     extractors: { total: 0, success: 0, failed: 0 },
+    totalItems: 0,
   }
 }
 

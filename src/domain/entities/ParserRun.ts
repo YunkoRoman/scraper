@@ -16,13 +16,19 @@ export interface RunStats {
   inProgress: number
   traversers: StepTypeStats
   extractors: StepTypeStats
+  totalItems: number
 }
 
 export class ParserRun {
   readonly id: string
   readonly startedAt = new Date()
-  constructor(readonly parserName: string, id?: string) {
+  constructor(
+    readonly parserName: string,
+    id?: string,
+  ) {
     this.id = id ?? randomUUID()
   }
-  elapsedMs(): number { return Date.now() - this.startedAt.getTime() }
+  elapsedMs(): number {
+    return Date.now() - this.startedAt.getTime()
+  }
 }
